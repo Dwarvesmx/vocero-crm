@@ -1,6 +1,7 @@
 import { ingestInboundMessage } from "@/server/inbox/ingest";
 import { obtenerZernioWhatsAppPorCuenta } from "@/server/zernio/whatsapp-credenciales";
 import { normalizarEntranteWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
+import { procesarSalienteWhatsAppZernio } from "@/server/zernio/whatsapp-saliente";
 
 /** El worker solo recibe eventos autenticados y guardados por la ruta. */
 export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<void> {
@@ -9,6 +10,10 @@ export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<
   if (!accountRef) throw new Error("Falta la cuenta de Zernio");
   const cred = await obtenerZernioWhatsAppPorCuenta(accountRef);
   if (!cred) throw new Error("Conexión de WhatsApp no disponible");
+  if (evento.event === "message.sent") {
+    await procesarSalienteWhatsAppZernio(cred.organizationId, evento);
+    return;
+  }
   const entrada = normalizarEntranteWhatsAppZernio(evento);
   if (!entrada || !entrada.text) throw new Error("Mensaje de WhatsApp no soportado");
   await ingestInboundMessage({

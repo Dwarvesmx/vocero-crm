@@ -18,8 +18,6 @@ export async function POST(req: Request) {
     if (!cred) return new Response(null, { status: 401 });
     const evento = validarEventoWhatsAppZernio({ cuerpo, firma: req.headers.get("x-zernio-signature"), secreto: cred.secreto, cuentaAutorizada: cred.accountRef });
     if (!evento) return new Response(null, { status: 401 });
-    // No acusar salientes antes de implementar su persistencia de coexistence.
-    if (evento.event !== "message.received") return new Response(null, { status: 503 });
     return await recibirEvento("zernio_whatsapp", evento, cuerpo, "zernio-whatsapp", {
       organizationId: cred.organizationId, deduplicacion: `zernio-whatsapp:${cred.accountRef}:${evento.id}`,
     });

@@ -5,10 +5,11 @@ import { barrido, detenerBarrido, procesarEvento } from "@/server/webhooks/worke
 import { programarFallosDePrueba } from "@/server/dev/webhook-fallo";
 import { guardarZernioWhatsApp } from "@/server/zernio/whatsapp-credenciales";
 import { barrerEnviosWhatsAppZernio, encolarEnvioWhatsAppZernio } from "@/server/zernio/whatsapp-outbox";
-import { listMessages } from "@/server/inbox/queries";
+import { listMessages, updateConversation } from "@/server/inbox/queries";
 import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
 import { POST } from "@/app/api/webhooks/zernio-whatsapp/route";
 import { createHmac } from "node:crypto";
+import postgres from "postgres";
 vi.mock("next/server", () => ({ after: vi.fn() }));
 
 // Nunca ejecutar contra una URL arbitraria: además se verifica data_directory.
@@ -138,6 +139,39 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
       threadRef: "hilo", text: "no debe guardarse", requestKey: "clave_rollback" })).rejects.toThrow();
     expect(await sql`select id from message where text='no debe guardarse' and organization_id=${org}`).toHaveLength(0);
     expect(await sql`select id from zernio_whatsapp_outbox where request_key='clave_rollback'`).toHaveLength(0);
+  });
+
+  it("sincroniza el teléfono una sola vez sin tomar el control humano ni despachar", async () => {
+    const [conv] = await sql`select id, ai_enabled, last_message_at from conversation where organization_id=${org} limit 1`;
+    const base = evento("ev_telefono", "wamid_telefono");
+    const salida = { ...base, event: "message.sent", conversation: { id: "hilo_ficticio", participantId: "525512340001" },
+      message: { ...base.message, direction: "outgoing", source: "whatsapp_business_app", sentAt: "2020-01-01T12:00:00Z" } };
+    const antes = await sql`select count(*)::int as n from dispatch where organization_id=${org}`;
+    await procesarEntranteWhatsAppZernio(salida);
+    await procesarEntranteWhatsAppZernio(salida);
+    const mensajes = await sql`select id, direction, origin, conversation_id from message where wa_message_id='wamid_telefono'`;
+    expect(mensajes).toHaveLength(1);
+    expect(mensajes[0]).toMatchObject({ direction: "out", origin: "manual", conversation_id: conv!.id });
+    const [despues] = await sql`select ai_enabled, last_message_at from conversation where id=${String(conv!.id)}`;
+    expect(despues?.ai_enabled).toBe(conv!.ai_enabled);
+    expect(String(despues?.last_message_at)).toBe(String(conv!.last_message_at));
+    expect(await sql`select count(*)::int as n from dispatch where organization_id=${org}`).toEqual(antes);
+    await updateConversation(org, String(conv!.id), { aiEnabled: false });
+    await procesarEntranteWhatsAppZernio({ ...salida, id: "ev_telefono2", message: { ...salida.message, platformMessageId: "wamid_telefono2" } });
+    const conexionNueva = postgres(process.env.DATABASE_URL!, { max: 1 });
+    try { expect((await conexionNueva`select ai_enabled from conversation where id=${String(conv!.id)}`)[0]?.ai_enabled).toBe(false); }
+    finally { await conexionNueva.end(); }
+    await updateConversation(org, String(conv!.id), { reactivate: true });
+    expect((await sql`select ai_enabled from conversation where id=${String(conv!.id)}`)[0]?.ai_enabled).toBe(true);
+  });
+
+  it("concilia ecos de API con mensajes existentes y reintenta los aún desconocidos", async () => {
+    const base = evento("ev_api", "wamid_salida_prueba");
+    const salida = { ...base, event: "message.sent", message: { ...base.message, direction: "outgoing", source: "cloud_api" } };
+    await procesarEntranteWhatsAppZernio(salida);
+    expect(await sql`select id from message where wa_message_id='wamid_salida_prueba'`).toHaveLength(1);
+    await expect(procesarEntranteWhatsAppZernio({ ...salida, message: { ...salida.message, platformMessageId: "wamid_aun_no_confirmado" } })).rejects.toThrow("conciliado");
+    expect(await sql`select id from message where wa_message_id='wamid_aun_no_confirmado'`).toHaveLength(0);
   });
 
   it("revierte toda la ingesta si falla la actualización de la conversación", async () => {

@@ -37,10 +37,10 @@ describe("ruta de WhatsApp Zernio", () => {
     expect((await POST(request(payload))).status).toBe(503);
     expect((await POST(request(payload))).status).toBe(200);
   });
-  it("no acusa como guardados los salientes aún no soportados", async () => {
+  it("guarda los salientes autenticados en la misma cola durable", async () => {
     const salida = { ...payload, event: "message.sent", message: { ...payload.message, direction: "outgoing" } };
-    expect((await POST(request(salida))).status).toBe(503);
-    expect(recibirEvento).not.toHaveBeenCalled();
+    expect((await POST(request(salida))).status).toBe(200);
+    expect(recibirEvento).toHaveBeenCalledWith("zernio_whatsapp", expect.objectContaining({ event: "message.sent" }), expect.any(String), "zernio-whatsapp", expect.any(Object));
   });
   it("está apagada por defecto", async () => {
     vi.stubEnv("ZERNIO_WHATSAPP_ENABLED", "false");

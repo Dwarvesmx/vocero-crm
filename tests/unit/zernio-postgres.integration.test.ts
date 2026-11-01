@@ -174,6 +174,21 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
     expect(await sql`select id from message where wa_message_id='wamid_aun_no_confirmado'`).toHaveLength(0);
   });
 
+  it("agota de forma visible los ecos API desconocidos sin crear mensajes", async () => {
+    const base = evento("ev_api_desconocido", "wamid_api_desconocido");
+    const payload = { ...base, event: "message.sent", message: { ...base.message, direction: "outgoing", source: "cloud_api" } };
+    const guardado = await guardarEvento({ organizationId: org, fuente: "zernio_whatsapp", payload,
+      rawBody: `zernio-whatsapp:${cuenta}:ev_api_desconocido` });
+    for (let intento = 1; intento <= 6; intento++) {
+      await sql`update webhook_event set not_before=now()-interval '1 second' where id=${guardado.id}`;
+      await procesarEvento(guardado.id);
+      const [fila] = await sql`select status, attempts, last_error from webhook_event where id=${guardado.id}`;
+      expect(fila).toMatchObject({ status: intento === 6 ? "agotado" : "pendiente", attempts: intento,
+        last_error: "No se pudo procesar el evento de Zernio" });
+    }
+    expect(await sql`select id from message where wa_message_id='wamid_api_desconocido'`).toHaveLength(0);
+  });
+
   it("revierte toda la ingesta si falla la actualización de la conversación", async () => {
     await sql`create or replace function prueba_interrupcion_conversacion() returns trigger language plpgsql as $$ begin if new.organization_id = 'org_zernio_prueba' then raise exception 'fallo simulado'; end if; return new; end $$`;
     await sql`create trigger prueba_interrupcion before update on conversation for each row execute function prueba_interrupcion_conversacion()`;

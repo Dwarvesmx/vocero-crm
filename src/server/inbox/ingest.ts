@@ -523,8 +523,8 @@ export async function ingestInboundMessage(input: {
         const rows = await tx.insert(schema.message).values(values)
           .onConflictDoNothing({ target: [schema.message.waMessageId] }).returning();
         if (rows[0]) await tx.update(schema.conversation).set({
-          lastInboundAt: sql`greatest(${schema.conversation.lastInboundAt}, ${waTimestamp})`,
-          lastMessageAt: sql`greatest(${schema.conversation.lastMessageAt}, ${waTimestamp})`,
+          lastInboundAt: sql`greatest(${schema.conversation.lastInboundAt}, ${waTimestamp.toISOString()}::timestamp)`,
+          lastMessageAt: sql`greatest(${schema.conversation.lastMessageAt}, ${waTimestamp.toISOString()}::timestamp)`,
           unreadCount: sql`${schema.conversation.unreadCount} + 1`, updatedAt: new Date(),
         }).where(and(eq(schema.conversation.id, conversation.id), eq(schema.conversation.organizationId, organizationId)));
         return rows;

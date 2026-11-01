@@ -26,7 +26,7 @@ export async function onLeadActivity(
   if (existing[0]) {
     await db
       .update(schema.lead)
-      .set({ lastActivityAt: conservarOrden ? sql`greatest(${schema.lead.lastActivityAt}, ${at})` : at, updatedAt: new Date() })
+      .set({ lastActivityAt: conservarOrden ? sql`greatest(${schema.lead.lastActivityAt}, ${at.toISOString()}::timestamp)` : at, updatedAt: new Date() })
       .where(eq(schema.lead.id, existing[0].id));
     return;
   }

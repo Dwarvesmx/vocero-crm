@@ -56,6 +56,7 @@ const sendSchema = z.union([
     // canal lo comprueba el envío (`text_too_long`).
     text: z.string().trim().min(1).max(MAX_TEXT_CHARS_ANY_CHANNEL, TEXT_TOO_LONG_ANY_CHANNEL),
     replyToMessageId,
+    requestKey: z.string().uuid().optional(),
   }),
   z.object({
     type: z.literal("location"),
@@ -109,6 +110,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
             organizationId: session.organizationId,
             text: data.text,
             replyToMessageId: data.replyToMessageId,
+            requestKey: data.requestKey,
           })
         : data.type === "location"
           ? await sendStructured({

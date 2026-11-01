@@ -537,6 +537,46 @@ export const metaCredentials = pgTable(
   ]
 );
 
+/** Credenciales opcionales de WhatsApp vía Zernio; independientes de Meta. */
+export const zernioWhatsappCredentials = pgTable(
+  "zernio_whatsapp_credentials",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    accountRef: text("account_ref").notNull(),
+    tokenCipher: text("token_cipher").notNull(),
+    tokenIv: text("token_iv").notNull(),
+    tokenTag: text("token_tag").notNull(),
+    secretCipher: text("secret_cipher").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    secretTag: text("secret_tag").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("zernio_wa_org_uq").on(t.organizationId),
+    uniqueIndex("zernio_wa_account_uq").on(t.accountRef),
+  ]
+);
+
+/** Cola durable de envíos manuales; una clave por intención del operador. */
+export const zernioWhatsappOutbox = pgTable("zernio_whatsapp_outbox", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "cascade" }),
+  messageId: text("message_id").notNull().references(() => message.id, { onDelete: "cascade" }),
+  accountRef: text("account_ref").notNull(),
+  threadRef: text("thread_ref").notNull(),
+  requestKey: text("request_key").notNull(),
+  status: text("status", { enum: ["pendiente", "procesando", "completado", "fallido"] }).notNull().default("pendiente"),
+  attempts: integer("attempts").notNull().default(0),
+  notBefore: timestamp("not_before").notNull().defaultNow(),
+  leasedUntil: timestamp("leased_until"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("zernio_wa_outbox_request_uq").on(t.organizationId, t.requestKey),
+  index("zernio_wa_outbox_work_idx").on(t.status, t.notBefore)]);
+
 /**
  * 014 - Credenciales del canal de Instagram. Tabla explicita (no un jsonb
  * generico) porque unas credenciales tienen forma fija y conocida: asi
@@ -1309,7 +1349,7 @@ export const webhookEvent = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     /** Quién lo procesa: el adaptador del canal y la fuente. */
     fuente: text("fuente", {
-      enum: ["whatsapp", "meta_instagram", "meta_messenger", "zernio"],
+      enum: ["whatsapp", "meta_instagram", "meta_messenger", "zernio", "zernio_whatsapp"],
     }).notNull(),
     payload: jsonb("payload").notNull(),
     /** SHA-256 del cuerpo crudo: la misma entrega dos veces es una fila. */

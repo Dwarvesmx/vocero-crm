@@ -32,6 +32,8 @@ import {
   type TiktokCredentials,
 } from "@/server/tiktok/credentials";
 import { sendTiktokText } from "@/server/tiktok/send";
+import { obtenerZernioWhatsAppPorOrg } from "@/server/zernio/whatsapp-credenciales";
+import { encolarEnvioWhatsAppZernio } from "@/server/zernio/whatsapp-outbox";
 import { prepararAudioSaliente } from "@/server/whatsapp/nota-de-voz";
 import {
   cabeOtroMensaje,
@@ -97,6 +99,7 @@ type SendTarget = {
   messenger?: MessengerCredentials;
   /** 022: presente solo en conversaciones de TikTok. */
   tiktok?: TiktokCredentials;
+  zernioWhatsapp?: { accountRef: string };
   /**
    * 024: el envío sale con la etiqueta de agente humano. Lo decide el
    * pre-vuelo (`assertReplyWindow`), no cada canal por su cuenta.
@@ -138,7 +141,8 @@ async function prepareSend(
   conversationId: string,
   organizationId: string,
   /** 024: quién escribe decide si puede usar la extensión humana. */
-  aiGenerated: boolean = false
+  aiGenerated: boolean = false,
+  admiteZernio: boolean = false
 ): Promise<SendTarget> {
   const db = getDb();
   const rows = await db
@@ -309,6 +313,13 @@ async function prepareSend(
     );
   }
 
+  const zernio = process.env.ZERNIO_WHATSAPP_ENABLED === "true"
+    ? await obtenerZernioWhatsAppPorOrg(organizationId) : null;
+  if (zernio) {
+    if (!admiteZernio || aiGenerated) throw new SendError("meta_error", "Este tipo de envío aún no está disponible por Zernio");
+    if (!row.conversation.channelThreadRef) throw new SendError("not_connected", "La conversación no tiene hilo de Zernio");
+    return { conversation: row.conversation, credentials: null, destinatario: { to: "" }, recipient: "", zernioWhatsapp: { accountRef: zernio.accountRef } };
+  }
   const credentials = await getCredentialsByOrg(organizationId);
   if (!credentials) {
     throw new SendError("not_connected", "No hay número de WhatsApp conectado");
@@ -463,11 +474,13 @@ export async function sendText(input: {
   aiGenerated?: boolean;
   /** 039: id local del mensaje al que se responde citando. */
   replyToMessageId?: string;
+  requestKey?: string;
 }): Promise<SendResult> {
   const target = await prepareSend(
     input.conversationId,
     input.organizationId,
-    input.aiGenerated ?? false
+    input.aiGenerated ?? false,
+    true
   );
   const { credentials } = target;
   const canal = target.conversation.channel;
@@ -489,6 +502,15 @@ export async function sendText(input: {
   }
 
   const cita = await resolverMensajeCitado(target, input.replyToMessageId);
+
+  if (target.zernioWhatsapp) {
+    if (cita) throw new SendError("reply_unavailable", "Las respuestas citadas aún no están disponibles por Zernio");
+    if (!input.requestKey) throw new SendError("meta_error", "Falta la clave de envío; actualiza la página e inténtalo de nuevo");
+    const messageId = await encolarEnvioWhatsAppZernio({ organizationId: input.organizationId,
+      conversationId: input.conversationId, accountRef: target.zernioWhatsapp.accountRef,
+      threadRef: target.conversation.channelThreadRef!, text, requestKey: input.requestKey });
+    return { messageId };
+  }
 
   const waMessageId = target.instagram
     ? await callInstagramSend(target, text)

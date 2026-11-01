@@ -4,6 +4,7 @@ import { processTemplateStatusValue } from "@/server/whatsapp/template-events";
 import { processMetaInstagramPayload } from "@/server/instagram/ingest";
 import { processMetaPagePayload } from "@/server/messenger/ingest";
 import { processZernioPayload } from "@/server/zernio/dispatch";
+import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
 import { lanzarFalloDePrueba } from "@/server/dev/webhook-fallo";
 import type { FuenteWebhook } from "./eventos";
 
@@ -31,6 +32,9 @@ export async function procesarFuente(
       return processMetaPagePayload(payload);
     case "zernio":
       return processZernioPayload(payload);
+    case "zernio_whatsapp":
+      try { return await procesarEntranteWhatsAppZernio(payload); }
+      catch { throw new Error("No se pudo procesar el evento de Zernio"); }
   }
 }
 

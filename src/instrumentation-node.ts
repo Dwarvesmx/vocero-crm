@@ -123,3 +123,9 @@ export function resumeWebhooks(): void {
   iniciarBarrido();
   void barrido();
 }
+
+export async function resumeZernioWhatsapp(): Promise<void> {
+  if (process.env.ZERNIO_WHATSAPP_ENABLED !== "true") return;
+  const { iniciarEnviosWhatsAppZernio } = await import("@/server/zernio/whatsapp-outbox");
+  iniciarEnviosWhatsAppZernio();
+}

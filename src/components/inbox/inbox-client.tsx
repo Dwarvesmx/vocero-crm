@@ -331,6 +331,7 @@ export function InboxClient({
       if (!conversationId) return "Sin conversación seleccionada";
 
       const tmpId = `tmp_${++tmpSeq.current}`;
+      const requestKey = crypto.randomUUID();
       setPending((prev) => [
         ...prev,
         {
@@ -348,12 +349,12 @@ export function InboxClient({
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(
-            cita ? { text, replyToMessageId: cita.id } : { text }
+            cita ? { text, replyToMessageId: cita.id, requestKey } : { text, requestKey }
           ),
         }).catch(() => null);
         if (!res) {
           drop();
-          return "Sin conexión con el servidor";
+          return "No se pudo confirmar el envío. Revisa la conversación antes de volver a enviarlo.";
         }
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as {

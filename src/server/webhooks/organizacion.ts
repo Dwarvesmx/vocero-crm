@@ -82,5 +82,8 @@ export async function resolverOrganizacion(
       const found = await b.porCuentaZernio(payload as ZernioEvent);
       return found?.organizationId ?? null;
     }
+    case "zernio_whatsapp":
+      // Esta fuente se guarda desde su ruta tras verificar cuenta y firma.
+      return null;
   }
 }

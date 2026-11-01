@@ -20,12 +20,13 @@ export async function recibirEvento(
   fuente: FuenteWebhook,
   payload: unknown,
   rawBody: string,
-  etiqueta: string
+  etiqueta: string,
+  verificado?: { organizationId: string; deduplicacion: string }
 ): Promise<Response> {
   let organizationId: string | null;
   let evento: { id: string; nuevo: boolean };
   try {
-    organizationId = await resolverOrganizacion(fuente, payload);
+    organizationId = verificado?.organizationId ?? await resolverOrganizacion(fuente, payload);
     if (!organizationId) {
       after(async () => {
         try {
@@ -36,11 +37,11 @@ export async function recibirEvento(
       });
       return Response.json({ received: true });
     }
-    evento = await guardarEvento({ organizationId, fuente, payload, rawBody });
+    evento = await guardarEvento({ organizationId, fuente, payload, rawBody: verificado?.deduplicacion ?? rawBody });
   } catch (err) {
     console.error(
       `[${etiqueta}] no se pudo guardar el evento; se responde 503 para que la fuente reintente:`,
-      resumen(err)
+      fuente === "zernio_whatsapp" ? "error de persistencia" : resumen(err)
     );
     return Response.json({ received: false }, { status: 503 });
   }

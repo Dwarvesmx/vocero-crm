@@ -461,6 +461,10 @@ export async function ingestInboundMessage(input: {
   threadRef?: string | null;
   /** 016/018: el anuncio que abrió la conversación, ya normalizado por el canal. */
   anuncio?: AnuncioDeOrigen | null;
+  /** Zernio puede entregar mensajes en standby que solo debemos observar. */
+  omitirDespacho?: boolean;
+  /** No retroceder la ventana por una entrega antigua de Zernio. */
+  conservarOrden?: boolean;
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -502,40 +506,69 @@ export async function ingestInboundMessage(input: {
   const waTimestamp = toDate(input.timestamp);
 
   // Idempotencia dura: mismo wa_message_id → sin efectos adicionales.
-  const inserted = await db
-    .insert(schema.message)
-    .values({
+  const values = {
       id: newId("message"),
       organizationId,
       conversationId: conversation.id,
       waMessageId: input.waMessageId,
-      direction: "in",
+      direction: "in" as const,
       type: input.type,
       text: input.text,
-      status: "delivered",
+      status: "delivered" as const,
       replyToWaMessageId: input.replyToWaMessageId ?? null,
       waTimestamp,
-    })
-    .onConflictDoNothing({ target: [schema.message.waMessageId] })
-    .returning();
+    };
+  const inserted = input.conservarOrden
+    ? await db.transaction(async (tx) => {
+        const rows = await tx.insert(schema.message).values(values)
+          .onConflictDoNothing({ target: [schema.message.waMessageId] }).returning();
+        if (rows[0]) await tx.update(schema.conversation).set({
+          lastInboundAt: sql`greatest(${schema.conversation.lastInboundAt}, ${waTimestamp})`,
+          lastMessageAt: sql`greatest(${schema.conversation.lastMessageAt}, ${waTimestamp})`,
+          unreadCount: sql`${schema.conversation.unreadCount} + 1`, updatedAt: new Date(),
+        }).where(and(eq(schema.conversation.id, conversation.id), eq(schema.conversation.organizationId, organizationId)));
+        return rows;
+      })
+    : await db.insert(schema.message).values(values)
+      .onConflictDoNothing({ target: [schema.message.waMessageId] }).returning();
   const message = inserted[0];
-  if (!message) return; // duplicado
+  if (!message) {
+    // Si el proceso murió después de confirmar el mensaje, reanuda el
+    // trabajo idempotente que sigue a la transacción.
+    if (input.conservarOrden) {
+      await onLeadActivity(organizationId, contact.id, waTimestamp, true);
+      // El proceso pudo morir después del commit y antes de avisar al cliente.
+      const [persistido] = await db.select().from(schema.message).where(and(
+        eq(schema.message.organizationId, organizationId),
+        eq(schema.message.waMessageId, input.waMessageId)
+      )).limit(1);
+      if (persistido) {
+        publish(organizationId, { type: "message.new", data: {
+          conversationId: persistido.conversationId,
+          message: serializeMessage(persistido, null, null),
+        } });
+        publish(organizationId, { type: "conversation.updated", data: { conversation: { id: persistido.conversationId } } });
+      }
+    }
+    return;
+  }
 
   const asset = input.media
     ? await attachMediaAsset(organizationId, message.id, input.media)
     : null;
 
-  await db
+  if (!input.conservarOrden) await db
     .update(schema.conversation)
     .set({
-      lastInboundAt: waTimestamp,
-      lastMessageAt: waTimestamp,
+      lastInboundAt: input.conservarOrden ? sql`greatest(${schema.conversation.lastInboundAt}, ${waTimestamp})` : waTimestamp,
+      lastMessageAt: input.conservarOrden ? sql`greatest(${schema.conversation.lastMessageAt}, ${waTimestamp})` : waTimestamp,
       unreadCount: sql`${schema.conversation.unreadCount} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(schema.conversation.id, conversation.id));
 
-  await onLeadActivity(organizationId, contact.id, waTimestamp);
+  if (input.conservarOrden) await onLeadActivity(organizationId, contact.id, waTimestamp, true);
+  else await onLeadActivity(organizationId, contact.id, waTimestamp);
 
   publish(organizationId, {
     type: "message.new",
@@ -555,7 +588,7 @@ export async function ingestInboundMessage(input: {
 
   // 036 — Quien contesta es el cerebro conectado; sin él, una persona. El
   // 025: `message.id` es lo que el despacho le debe al cerebro.
-  if (despachoActivo()) await despacharAlCerebro(conversation.id, organizationId, message.id);
+  if (!input.omitirDespacho && despachoActivo()) await despacharAlCerebro(conversation.id, organizationId, message.id);
 }
 
 function toDate(timestamp: string): Date {

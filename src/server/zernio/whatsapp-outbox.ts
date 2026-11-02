@@ -22,15 +22,16 @@ export function politicaEnvioZernio(status: number, attempts: number, edadMs: nu
 
 export async function encolarEnvioWhatsAppZernio(input: {
   organizationId: string; conversationId: string; accountRef: string;
-  threadRef: string; text: string; requestKey: string;
+  threadRef: string; text: string; requestKey: string; aiGenerated?: boolean;
 }) {
   const db = getDb();
-  const buscar = async () => (await db.select({ job: schema.zernioWhatsappOutbox, text: schema.message.text })
+  const buscar = async () => (await db.select({ job: schema.zernioWhatsappOutbox, text: schema.message.text, aiGenerated: schema.message.aiGenerated })
     .from(schema.zernioWhatsappOutbox).innerJoin(schema.message, eq(schema.message.id, schema.zernioWhatsappOutbox.messageId))
     .where(and(eq(schema.zernioWhatsappOutbox.organizationId, input.organizationId), eq(schema.zernioWhatsappOutbox.requestKey, input.requestKey))).limit(1))[0];
   const validar = (previo: NonNullable<Awaited<ReturnType<typeof buscar>>>) => {
     if (previo.job.conversationId !== input.conversationId || previo.text !== input.text ||
-        previo.job.accountRef !== input.accountRef || previo.job.threadRef !== input.threadRef) {
+        previo.job.accountRef !== input.accountRef || previo.job.threadRef !== input.threadRef ||
+        Boolean(previo.aiGenerated) !== Boolean(input.aiGenerated)) {
       throw new Error("La clave ya corresponde a otra solicitud");
     }
     return previo.job.messageId;
@@ -41,10 +42,12 @@ export async function encolarEnvioWhatsAppZernio(input: {
   try { await db.transaction(async (tx) => {
     await tx.insert(schema.message).values({ id: messageId, organizationId: input.organizationId,
       conversationId: input.conversationId, direction: "out", type: "text", text: input.text,
-      status: "pending", origin: "operator" });
+      status: "pending", origin: input.aiGenerated ? "ai" : "operator", aiGenerated: input.aiGenerated ?? false });
     await tx.insert(schema.zernioWhatsappOutbox).values({ id: newId("dispatch"),
       organizationId: input.organizationId, conversationId: input.conversationId, messageId,
-      accountRef: input.accountRef, threadRef: input.threadRef, requestKey: input.requestKey });
+      accountRef: input.accountRef, threadRef: input.threadRef, requestKey: input.requestKey,
+      // Se registra la intención sin habilitar el transporte automático.
+      status: input.aiGenerated ? "retenido" : "pendiente" });
     await tx.update(schema.conversation).set({ lastMessageAt: new Date(), updatedAt: new Date() })
       .where(and(eq(schema.conversation.id, input.conversationId), eq(schema.conversation.organizationId, input.organizationId)));
   }); } catch (error) {

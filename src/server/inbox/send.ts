@@ -83,6 +83,8 @@ export class SendError extends Error {
   }
 }
 
+export class AiPausedError extends Error {}
+
 type SendResult = { messageId: string };
 
 type SendTarget = {
@@ -316,7 +318,14 @@ async function prepareSend(
   const zernio = process.env.ZERNIO_WHATSAPP_ENABLED === "true"
     ? await obtenerZernioWhatsAppPorOrg(organizationId) : null;
   if (zernio) {
-    if (!admiteZernio || aiGenerated) throw new SendError("meta_error", "Este tipo de envío aún no está disponible por Zernio");
+    if (!admiteZernio || (aiGenerated && process.env.ZERNIO_NEA_RESPONSE_ID_ENABLED !== "true")) throw new SendError("meta_error", "Este tipo de envío aún no está disponible por Zernio");
+    if (aiGenerated) {
+      const [profile] = await db.select({ enabled: schema.agentProfile.enabled }).from(schema.agentProfile)
+        .where(eq(schema.agentProfile.organizationId, organizationId)).limit(1);
+      if (!profile?.enabled || !row.conversation.aiEnabled || row.conversation.handoffAt) {
+        throw new AiPausedError("La respuesta automática está desactivada o pausada");
+      }
+    }
     if (!row.conversation.channelThreadRef) throw new SendError("not_connected", "La conversación no tiene hilo de Zernio");
     return { conversation: row.conversation, credentials: null, destinatario: { to: "" }, recipient: "", zernioWhatsapp: { accountRef: zernio.accountRef } };
   }
@@ -506,9 +515,11 @@ export async function sendText(input: {
   if (target.zernioWhatsapp) {
     if (cita) throw new SendError("reply_unavailable", "Las respuestas citadas aún no están disponibles por Zernio");
     if (!input.requestKey) throw new SendError("meta_error", "Falta la clave de envío; actualiza la página e inténtalo de nuevo");
+    if (input.aiGenerated && !input.requestKey.startsWith("nea:")) throw new SendError("meta_error", "Falta la identidad estable de la respuesta");
     const messageId = await encolarEnvioWhatsAppZernio({ organizationId: input.organizationId,
       conversationId: input.conversationId, accountRef: target.zernioWhatsapp.accountRef,
-      threadRef: target.conversation.channelThreadRef!, text, requestKey: input.requestKey });
+      threadRef: target.conversation.channelThreadRef!, text, requestKey: input.requestKey,
+      ...(input.aiGenerated ? { aiGenerated: true } : {}) });
     return { messageId };
   }
 

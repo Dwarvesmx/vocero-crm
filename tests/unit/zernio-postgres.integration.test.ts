@@ -8,9 +8,14 @@ import { barrerEnviosWhatsAppZernio, encolarEnvioWhatsAppZernio } from "@/server
 import { listMessages, updateConversation } from "@/server/inbox/queries";
 import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
 import { POST } from "@/app/api/webhooks/zernio-whatsapp/route";
+import { POST as botMessages } from "@/app/api/bot/messages/route";
 import { createHmac } from "node:crypto";
 import postgres from "postgres";
+import { createServer } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 vi.mock("next/server", () => ({ after: vi.fn() }));
+vi.mock("@/server/bot/auth", () => ({ requireBotKey: () => null, resolveInstanceOrg: async () => "org_zernio_prueba" }));
 
 // Nunca ejecutar contra una URL arbitraria: además se verifica data_directory.
 const url = process.env.DATABASE_URL;
@@ -141,6 +146,20 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
     expect(await sql`select id from zernio_whatsapp_outbox where request_key='clave_rollback'`).toHaveLength(0);
   });
 
+  it("deduplica solicitudes concurrentes por identidad y conserva respuestas distintas con igual texto", async () => {
+    process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+    const [conv] = await sql`select id from conversation where organization_id=${org} limit 1`;
+    const base = { organizationId: org, conversationId: String(conv!.id), accountRef: cuenta,
+      threadRef: "hilo_ficticio", text: "mismo texto", requestKey: "nea:00000000-0000-4000-8000-000000000001" };
+    const [a, b] = await Promise.all([encolarEnvioWhatsAppZernio(base), encolarEnvioWhatsAppZernio(base)]);
+    expect(a).toBe(b);
+    const c = await encolarEnvioWhatsAppZernio({ ...base, requestKey: "nea:00000000-0000-4000-8000-000000000002" });
+    expect(c).not.toBe(a);
+    const filas = await sql`select request_key from zernio_whatsapp_outbox where organization_id=${org} and request_key like 'nea:%'`;
+    expect(filas).toHaveLength(2);
+    expect(await encolarEnvioWhatsAppZernio(base)).toBe(a);
+  });
+
   it("sincroniza el teléfono una sola vez sin tomar el control humano ni despachar", async () => {
     const [conv] = await sql`select id, ai_enabled, last_message_at from conversation where organization_id=${org} limit 1`;
     const base = evento("ev_telefono", "wamid_telefono");
@@ -200,6 +219,70 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
       await sql`drop function prueba_interrupcion_conversacion()`;
     }
   });
+
+  it("el contrato bot conserva una intención retenida por UUID y respeta el interruptor", async () => {
+    process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+    process.env.ZERNIO_NEA_RESPONSE_ID_ENABLED = "true";
+    const [conv] = await sql`select id from conversation where organization_id=${org} limit 1`;
+    const cv = String(conv!.id);
+    await sql`update conversation set ai_enabled=true, handoff_at=null, last_inbound_at=now()::timestamp where id=${cv}`;
+    await sql`insert into agent_profile (id, organization_id, enabled) values ('perfil_prueba', ${org}, false)`;
+    const req = (id?: string) => new Request("http://localhost/api/bot/messages", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conversationId: cv, text: "igual", responseId: id }) });
+    const id = "e5e46abb-14d3-4fe2-b7c9-497da6e98791";
+    expect((await botMessages(req(id))).status).toBe(409);
+    await sql`update agent_profile set enabled=true where organization_id=${org}`;
+    expect((await botMessages(req())).status).not.toBe(200);
+    const [a, b] = await Promise.all([botMessages(req(id)), botMessages(req(id))]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect((await a.json()).messageId).toBe((await b.json()).messageId);
+    expect((await botMessages(req("e5e46abb-14d3-4fe2-b7c9-497da6e98792"))).status).toBe(200);
+    const filas = await sql`select o.status, m.origin, m.ai_generated from zernio_whatsapp_outbox o join message m on m.id=o.message_id where o.organization_id=${org} and o.request_key like 'nea:e5e46abb-%'`;
+    expect(filas).toHaveLength(2);
+    expect(filas.every((f) => f.status === "retenido" && f.origin === "ai" && f.ai_generated === true)).toBe(true);
+    process.env.ZERNIO_NEA_RESPONSE_ID_ENABLED = "false";
+    process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+  });
+
+  it.skipIf(!process.env.NEA_TEST_PYTHON || !process.env.NEA_TEST_PATH)("Nea reintenta una respuesta HTTP perdida sin duplicar la intención en Vocero", async () => {
+    process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+    process.env.ZERNIO_NEA_RESPONSE_ID_ENABLED = "true";
+    const [conv] = await sql`select id from conversation where organization_id=${org} limit 1`;
+    const cv = String(conv!.id);
+    const ids: string[] = [];
+    const server = createServer(async (incoming, outgoing) => {
+      try {
+        let body = "";
+        for await (const chunk of incoming) body += chunk;
+        ids.push(JSON.parse(body).responseId);
+        const result = await botMessages(new Request("http://localhost/api/bot/messages", {
+          method: "POST", headers: { "content-type": "application/json" }, body,
+        }));
+        const payload = await result.text();
+        if (ids.length === 1) { incoming.socket.destroy(); return; }
+        outgoing.writeHead(result.status, { "content-type": "application/json" });
+        outgoing.end(payload);
+      } catch { outgoing.writeHead(500); outgoing.end(); }
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Servidor local no disponible");
+    const source = `import asyncio, os, sys\nfrom app import turn\nfrom app.crm import CrmClient\nfrom tests.conftest import make_ctx\nasync def main():\n os.environ['NEA_DURABLE_RESPONSE_IDS']='true'\n ctx=make_ctx()\n await ctx.crm.aclose()\n ctx.crm=CrmClient(sys.argv[1], 'clave-ficticia-de-prueba')\n conv=await ctx.store.get_or_create_conversation('identidad-ficticia')\n async def instant(_): pass\n turn.asyncio.sleep=instant\n assert await turn._send(ctx, conv.id, sys.argv[2], 'respuesta desde Nea')\n await ctx.crm.aclose()\nasyncio.run(main())`;
+    try {
+      await promisify(execFile)(process.env.NEA_TEST_PYTHON!, ["-c", source, `http://127.0.0.1:${address.port}`, cv],
+        { cwd: process.env.NEA_TEST_PATH!, timeout: 30000 });
+      expect(ids).toHaveLength(2);
+      expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
+      expect(ids[0]).toBe(ids[1]);
+      const key = `nea:${ids[0]}`;
+      const rows = await sql`select status from zernio_whatsapp_outbox where organization_id=${org} and request_key=${key}`;
+      expect(rows).toEqual([expect.objectContaining({ status: "retenido" })]);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      process.env.ZERNIO_NEA_RESPONSE_ID_ENABLED = "false";
+      process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+    }
+  }, 30000);
 
   it("DDL de las migraciones nuevas se puede revertir dentro de una transacción", async () => {
     await expect(sql.begin(async (tx) => {

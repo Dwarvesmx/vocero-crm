@@ -7,7 +7,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { apiError, parseBody } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
-import { SendError, sendText } from "@/server/inbox/send";
+import { AiPausedError, SendError, sendText } from "@/server/inbox/send";
 import { guardarRespuestaDePrueba } from "@/server/lab/sandbox";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,8 @@ const bodySchema = z.object({
   // 022: el tope de aquí es el del canal que más admite; el de cada canal
   // lo comprueba el envío y sale como el mismo 422 `invalid_body` de siempre.
   text: z.string().min(1).max(MAX_TEXT_CHARS_ANY_CHANNEL, TEXT_TOO_LONG_ANY_CHANNEL),
+  // Un UUID distinto por respuesta lógica. Opcional para clientes heredados.
+  responseId: z.string().uuid().optional(),
 });
 
 /**
@@ -83,9 +85,13 @@ export async function POST(req: Request) {
       organizationId,
       text: body.data.text,
       aiGenerated: true,
+      requestKey: body.data.responseId ? `nea:${body.data.responseId.toLowerCase()}` : undefined,
     });
     return Response.json({ messageId: result.messageId });
   } catch (err) {
+    if (err instanceof AiPausedError) {
+      return apiError(409, "ai_paused", err.message);
+    }
     if (err instanceof SendError) {
       if (err.code === "window_closed") {
         return apiError(409, "window_closed", err.message);

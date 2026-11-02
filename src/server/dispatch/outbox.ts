@@ -150,7 +150,10 @@ export async function encolarDespacho(params: {
       // el índice único. Su fila cubre a este mensaje, pero no lo tiene
       // anotado: se vuelve a empezar para anotarlo en ella.
       if (!esViolacionDeUnicidad(err)) throw err;
-      if (vuelta >= 2 || !messageIds.length) return { id, notBefore };
+      // El conflicto no demuestra que la fila ganadora siga viva, y `id`
+      // nunca se insertó. No confirmar un despacho inexistente: consultar
+      // de nuevo y, si la contención persiste, dejar el error al llamador.
+      if (vuelta >= 2) throw err;
     }
   }
 }

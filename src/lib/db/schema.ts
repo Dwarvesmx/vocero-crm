@@ -568,7 +568,7 @@ export const zernioWhatsappOutbox = pgTable("zernio_whatsapp_outbox", {
   accountRef: text("account_ref").notNull(),
   threadRef: text("thread_ref").notNull(),
   requestKey: text("request_key").notNull(),
-  status: text("status", { enum: ["pendiente", "procesando", "completado", "fallido", "retenido"] }).notNull().default("pendiente"),
+  status: text("status", { enum: ["pendiente", "procesando", "completado", "fallido", "retenido", "iniciado", "cancelado", "incierto"] }).notNull().default("pendiente"),
   attempts: integer("attempts").notNull().default(0),
   notBefore: timestamp("not_before").notNull().defaultNow(),
   leasedUntil: timestamp("leased_until"),

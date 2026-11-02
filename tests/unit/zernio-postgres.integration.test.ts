@@ -4,7 +4,7 @@ import { guardarEvento, tomarEvento } from "@/server/webhooks/eventos";
 import { barrido, detenerBarrido, procesarEvento } from "@/server/webhooks/worker";
 import { programarFallosDePrueba } from "@/server/dev/webhook-fallo";
 import { guardarZernioWhatsApp } from "@/server/zernio/whatsapp-credenciales";
-import { barrerEnviosWhatsAppZernio, encolarEnvioWhatsAppZernio } from "@/server/zernio/whatsapp-outbox";
+import { barrerEnviosWhatsAppZernio, detenerEnviosWhatsAppZernio, encolarEnvioWhatsAppZernio } from "@/server/zernio/whatsapp-outbox";
 import { listMessages, updateConversation } from "@/server/inbox/queries";
 import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
 import { POST } from "@/app/api/webhooks/zernio-whatsapp/route";
@@ -12,6 +12,7 @@ import { POST as botMessages } from "@/app/api/bot/messages/route";
 import { tanda as tandaDespachos } from "@/server/dispatch/worker";
 import { tomarPendientes } from "@/server/dispatch/outbox";
 import { finalizarConPendientes } from "@/server/dispatch/transaccion";
+import { autorizarSalidaZernio, liberarSalidaZernio, recuperarSalidasInciertasZernio } from "@/server/zernio/whatsapp-autorizacion";
 import { createHmac } from "node:crypto";
 import postgres from "postgres";
 import { createServer } from "node:http";
@@ -355,6 +356,74 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
       delete process.env.ZERNIO_NEA_DISPATCH_ENABLED;
       delete process.env.BRAIN_DISPATCH_URL;
       delete process.env.BOT_API_KEY;
+    }
+  });
+  it("autoriza salidas con exclusión de control humano y detiene resultados ambiguos", async () => {
+    detenerEnviosWhatsAppZernio();
+    process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+    process.env.ZERNIO_NEA_AUTO_ENABLED = "true";
+    const [conv] = await sql`select id from conversation where organization_id=${org} limit 1`;
+    const cv = String(conv!.id);
+    let n = 0;
+    const crear = async () => {
+      const suffix = `seguro_${++n}`;
+      await sql`update conversation set ai_enabled=true, handoff_at=null, last_inbound_at=now(), channel_thread_ref='hilo_ficticio' where id=${cv}`;
+      await sql`update agent_profile set enabled=true where organization_id=${org}`;
+      await sql`insert into message (id, organization_id, conversation_id, direction, type, text, status, origin, ai_generated)
+        values (${suffix}, ${org}, ${cv}, 'out', 'text', 'ficticio', 'pending', 'ai', true)`;
+      await sql`insert into zernio_whatsapp_outbox (id, organization_id, conversation_id, message_id, account_ref, thread_ref, request_key, status)
+        values (${suffix}, ${org}, ${cv}, ${suffix}, ${cuenta}, 'hilo_ficticio', ${'nea:'+suffix}, 'retenido')`;
+      return suffix;
+    };
+    const status = async (id: string) => (await sql`select status from zernio_whatsapp_outbox where id=${id}`)[0]?.status;
+    const fetchMock = vi.fn(async () => {
+      // El asesor puede tomar el control durante HTTP: no hay transacción
+      // abierta. Esta solicitud ya cruzó el límite de cancelación.
+      await updateConversation(org, cv, { aiEnabled: false });
+      return Response.json({ success: true, data: { messageId: "wamid_seguro" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const human = await crear();
+      let pending: ReturnType<typeof autorizarSalidaZernio> | undefined;
+      await sql.begin(async (tx) => {
+        await tx`update conversation set ai_enabled=false where id=${cv}`;
+        pending = autorizarSalidaZernio(human);
+      });
+      expect(await pending).toBeNull();
+      expect(await status(human)).toBe("cancelado");
+      expect(fetchMock).not.toHaveBeenCalled();
+      const off = await crear();
+      await sql`update agent_profile set enabled=false where organization_id=${org}`;
+      expect(await autorizarSalidaZernio(off)).toBeNull();
+      expect(await status(off)).toBe("cancelado");
+      const expired = await crear();
+      await sql`update conversation set last_inbound_at=now()-interval '25 hours' where id=${cv}`;
+      expect(await autorizarSalidaZernio(expired)).toBeNull();
+      const account = await crear();
+      await sql`update zernio_whatsapp_outbox set account_ref='cuenta_ajena' where id=${account}`;
+      expect(await autorizarSalidaZernio(account)).toBeNull();
+      const good = await crear();
+      await Promise.all([liberarSalidaZernio(good), liberarSalidaZernio(good)]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(await status(good)).toBe("completado");
+      const ambiguous = await crear();
+      fetchMock.mockImplementation(async () => { throw new Error("timeout simulado"); });
+      await liberarSalidaZernio(ambiguous);
+      expect(await status(ambiguous)).toBe("incierto");
+      await liberarSalidaZernio(ambiguous);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const crashed = await crear();
+      expect(await autorizarSalidaZernio(crashed)).not.toBeNull();
+      // Una pausa posterior al commit no revoca una solicitud autorizada.
+      await updateConversation(org, cv, { aiEnabled: false });
+      await sql`update zernio_whatsapp_outbox set leased_until=now()-interval '1 second' where id=${crashed}`;
+      await recuperarSalidasInciertasZernio();
+      expect(await status(crashed)).toBe("incierto");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      process.env.ZERNIO_NEA_AUTO_ENABLED = "false";
+      process.env.ZERNIO_WHATSAPP_ENABLED = "false";
     }
   });
 });

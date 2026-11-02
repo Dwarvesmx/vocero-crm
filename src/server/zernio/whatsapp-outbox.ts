@@ -5,6 +5,7 @@ import { MetaApiError } from "@/lib/meta/client";
 import { publish } from "@/server/events/bus";
 import { obtenerZernioWhatsAppPorOrg } from "@/server/zernio/whatsapp-credenciales";
 import { enviarTextoWhatsAppZernio } from "@/server/zernio/whatsapp-envio";
+import { liberarSalidaZernio, recuperarSalidasInciertasZernio } from "./whatsapp-autorizacion";
 
 const RESERVA_MS = 120_000;
 const MAX_INTENTOS = 6;
@@ -103,6 +104,12 @@ export async function procesarEnvioZernioReservado(job: Job) {
 export async function barrerEnviosWhatsAppZernio() {
   if (process.env.ZERNIO_WHATSAPP_ENABLED !== "true") return;
   const db = getDb(), now = new Date();
+  await recuperarSalidasInciertasZernio();
+  if (process.env.ZERNIO_NEA_AUTO_ENABLED === "true") {
+    const retenidos = await db.select({ id: schema.zernioWhatsappOutbox.id }).from(schema.zernioWhatsappOutbox)
+      .where(eq(schema.zernioWhatsappOutbox.status, "retenido")).limit(20);
+    for (const row of retenidos) await liberarSalidaZernio(row.id);
+  }
   const candidates = await db.select().from(schema.zernioWhatsappOutbox).where(or(
     and(eq(schema.zernioWhatsappOutbox.status, "pendiente"), lte(schema.zernioWhatsappOutbox.notBefore, now)),
     and(eq(schema.zernioWhatsappOutbox.status, "procesando"), lte(schema.zernioWhatsappOutbox.leasedUntil, now))
@@ -122,4 +129,9 @@ export function iniciarEnviosWhatsAppZernio() {
   g.__zernioWaTimer = setInterval(() => { void barrerEnviosWhatsAppZernio().catch(() => {}); }, 10_000);
   g.__zernioWaTimer.unref?.();
   void barrerEnviosWhatsAppZernio().catch(() => {});
+}
+
+export function detenerEnviosWhatsAppZernio() {
+  if (g.__zernioWaTimer) clearInterval(g.__zernioWaTimer);
+  delete g.__zernioWaTimer;
 }

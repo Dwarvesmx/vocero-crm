@@ -4,7 +4,7 @@ import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { newId } from "@/lib/db/ids";
 
 type Fila = typeof schema.zernioWhatsappCredentials.$inferSelect;
-function descifrar(row: Fila) {
+export function descifrar(row: Fila) {
   return {
     organizationId: row.organizationId,
     accountRef: row.accountRef,

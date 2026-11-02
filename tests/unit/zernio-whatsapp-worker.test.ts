@@ -64,3 +64,4 @@ describe("worker de envíos", () => {
     } finally { vi.unstubAllEnvs(); }
   });
 });
+vi.mock("@/server/zernio/whatsapp-autorizacion", () => ({ liberarSalidaZernio: vi.fn(), recuperarSalidasInciertasZernio: vi.fn().mockResolvedValue(undefined) }));

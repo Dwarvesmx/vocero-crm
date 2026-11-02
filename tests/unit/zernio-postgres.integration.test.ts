@@ -9,6 +9,9 @@ import { listMessages, updateConversation } from "@/server/inbox/queries";
 import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
 import { POST } from "@/app/api/webhooks/zernio-whatsapp/route";
 import { POST as botMessages } from "@/app/api/bot/messages/route";
+import { tanda as tandaDespachos } from "@/server/dispatch/worker";
+import { tomarPendientes } from "@/server/dispatch/outbox";
+import { finalizarConPendientes } from "@/server/dispatch/transaccion";
 import { createHmac } from "node:crypto";
 import postgres from "postgres";
 import { createServer } from "node:http";
@@ -244,6 +247,28 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
     process.env.ZERNIO_WHATSAPP_ENABLED = "false";
   });
 
+  it("no entrega un despacho pendiente si el agente se apagó", async () => {
+    const [conv] = await sql`select id from conversation where organization_id=${org} limit 1`;
+    const cv = String(conv!.id);
+    await sql`update agent_profile set enabled=false where organization_id=${org}`;
+    await sql`insert into dispatch (id, organization_id, conversation_id, status, not_before, first_message_at, last_message_at)
+      values ('dsp_interruptor_prueba', ${org}, ${cv}, 'pendiente', now()-interval '1 second', now(), now())`;
+    const fetchMock = vi.fn().mockRejectedValue(new Error("ninguna red permitida"));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.BRAIN_DISPATCH_URL = "http://127.0.0.1:9/despacho";
+    process.env.BOT_API_KEY = "clave-ficticia-exclusiva-prueba";
+    try {
+      await tandaDespachos();
+      expect((await sql`select status, last_error from dispatch where id='dsp_interruptor_prueba'`)[0])
+        .toMatchObject({ status: "descartado", last_error: "el agente se apagó antes de despachar" });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      await sql`update agent_profile set enabled=true where organization_id=${org}`;
+      delete process.env.BRAIN_DISPATCH_URL;
+      delete process.env.BOT_API_KEY;
+    }
+  });
+
   it.skipIf(!process.env.NEA_TEST_PYTHON || !process.env.NEA_TEST_PATH)("Nea reintenta una respuesta HTTP perdida sin duplicar la intención en Vocero", async () => {
     process.env.ZERNIO_WHATSAPP_ENABLED = "true";
     process.env.ZERNIO_NEA_RESPONSE_ID_ENABLED = "true";
@@ -293,5 +318,43 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
     const [row] = await sql`select to_regclass('zernio_whatsapp_outbox') as outbox, to_regclass('zernio_whatsapp_credentials') as credenciales`;
     expect(row?.outbox).toBe("zernio_whatsapp_outbox");
     expect(row?.credenciales).toBe("zernio_whatsapp_credentials");
+  });
+
+  it("confirma ingesta y despacho juntos y conserva tres mensajes durante el vuelo", async () => {
+    process.env.ZERNIO_NEA_DISPATCH_ENABLED = "true";
+    process.env.BRAIN_DISPATCH_URL = "http://127.0.0.1:9/despacho";
+    process.env.BOT_API_KEY = "clave-ficticia-exclusiva-prueba";
+    try {
+      await procesarEntranteWhatsAppZernio(evento("tx_1", "wamid_tx_1"));
+      const [msg] = await sql`select id from message where wa_message_id='wamid_tx_1'`;
+      await sql`update dispatch set not_before=now()-interval '1 second' where organization_id=${org} and status='pendiente'`;
+      const claims = await Promise.all([tomarPendientes(), tomarPendientes()]);
+      const jobs = claims.flat();
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0]!.messageIds).toContain(msg!.id);
+      for (let i = 2; i <= 4; i++) await procesarEntranteWhatsAppZernio(evento(`tx_${i}`, `wamid_tx_${i}`));
+      await sql`update dispatch set leased_until=now()-interval '1 second' where id=${jobs[0]!.id}`;
+      const [recuperado] = await tomarPendientes();
+      expect(recuperado!.id).toBe(jobs[0]!.id);
+      expect(await finalizarConPendientes(jobs[0]!, [String(msg!.id)])).toBe(false);
+      await finalizarConPendientes(recuperado!, [String(msg!.id)]);
+      const rows = await sql`select message_ids from dispatch where organization_id=${org} and status='pendiente'`;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.message_ids).toHaveLength(3);
+      // Fallo SQL al registrar el despacho: también revierte el mensaje.
+      await sql`create function prueba_fallo_dispatch() returns trigger language plpgsql as $$ begin raise exception 'fallo despacho'; end $$`;
+      await sql`create trigger prueba_fallo_dispatch before insert on dispatch for each row execute function prueba_fallo_dispatch()`;
+      try {
+        await expect(procesarEntranteWhatsAppZernio(evento("tx_rollback", "wamid_tx_rollback"))).rejects.toThrow();
+        expect(await sql`select id from message where wa_message_id='wamid_tx_rollback'`).toHaveLength(0);
+      } finally {
+        await sql`drop trigger prueba_fallo_dispatch on dispatch`;
+        await sql`drop function prueba_fallo_dispatch()`;
+      }
+    } finally {
+      delete process.env.ZERNIO_NEA_DISPATCH_ENABLED;
+      delete process.env.BRAIN_DISPATCH_URL;
+      delete process.env.BOT_API_KEY;
+    }
   });
 });

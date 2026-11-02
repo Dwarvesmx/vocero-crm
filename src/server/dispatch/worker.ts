@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { leerConfigDespacho } from "@/server/brains/config";
+import { finalizarConPendientes } from "@/server/dispatch/transaccion";
 import {
   construirEvento,
   entregar,
@@ -192,6 +193,20 @@ async function procesar(fila: FilaDespacho): Promise<void> {
     return;
   }
 
+  // El interruptor puede apagarse después de encolar el turno. El
+  // Laboratorio usa conversaciones de prueba y su propio flujo de despacho.
+  if (!conv.isTest) {
+    const [perfil] = await getDb()
+      .select({ enabled: schema.agentProfile.enabled })
+      .from(schema.agentProfile)
+      .where(eq(schema.agentProfile.organizationId, fila.organizationId))
+      .limit(1);
+    if (!perfil?.enabled) {
+      await descartarDespacho(fila, "el agente se apagó antes de despachar");
+      return;
+    }
+  }
+
   const evento = await construirEvento(fila);
   if (!evento) {
     await descartarDespacho(fila, "la conversación ya no existe");
@@ -216,6 +231,10 @@ async function procesar(fila: FilaDespacho): Promise<void> {
   if (!(await renovarLease(fila))) return;
 
   if (resultado.ok) {
+    if (fila.messageIds !== null) {
+      await finalizarConPendientes(fila, evento.messages.map((m) => m.id));
+      return;
+    }
     if (!(await marcarEntregado(fila))) return;
     /**
      * 025 — Lo que entró mientras el evento iba en vuelo no viajó en él.

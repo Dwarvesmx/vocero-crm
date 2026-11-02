@@ -1,6 +1,6 @@
 import { ingestInboundMessage } from "@/server/inbox/ingest";
 import { obtenerZernioWhatsAppPorCuenta } from "@/server/zernio/whatsapp-credenciales";
-import { normalizarEntranteWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
+import { normalizarEntranteWhatsAppZernio, permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
 import { procesarSalienteWhatsAppZernio } from "@/server/zernio/whatsapp-saliente";
 
 /** El worker solo recibe eventos autenticados y guardados por la ruta. */
@@ -22,5 +22,6 @@ export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<
     timestamp: entrada.timestamp, threadRef: entrada.threadRef,
     // Esta etapa solo habilita atención manual; Nea se integra después.
     omitirDespacho: true, conservarOrden: true,
+    despachoTransaccional: process.env.ZERNIO_NEA_DISPATCH_ENABLED === "true" && permiteDespachoWhatsAppZernio(evento),
   });
 }

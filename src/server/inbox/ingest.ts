@@ -26,6 +26,7 @@ import { registrarAnuncioDeOrigen } from "@/server/attribution/store";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { despachoActivo } from "@/server/brains/config";
 import { despacharAlCerebro } from "@/server/dispatch/encolar";
+import { encolarEnTransaccion } from "@/server/dispatch/transaccion";
 import {
   aCitaDto,
   citaDelWebhook,
@@ -465,6 +466,7 @@ export async function ingestInboundMessage(input: {
   omitirDespacho?: boolean;
   /** No retroceder la ventana por una entrega antigua de Zernio. */
   conservarOrden?: boolean;
+  despachoTransaccional?: boolean;
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -527,6 +529,15 @@ export async function ingestInboundMessage(input: {
           lastMessageAt: sql`greatest(${schema.conversation.lastMessageAt}, ${waTimestamp.toISOString()}::timestamp)`,
           unreadCount: sql`${schema.conversation.unreadCount} + 1`, updatedAt: new Date(),
         }).where(and(eq(schema.conversation.id, conversation.id), eq(schema.conversation.organizationId, organizationId)));
+        if (rows[0] && input.despachoTransaccional && despachoActivo()) {
+          const [estado] = await tx.select({ ai: schema.conversation.aiEnabled, handoff: schema.conversation.handoffAt,
+            test: schema.conversation.isTest, enabled: schema.agentProfile.enabled })
+            .from(schema.conversation).innerJoin(schema.agentProfile, eq(schema.agentProfile.organizationId, schema.conversation.organizationId))
+            .where(eq(schema.conversation.id, conversation.id)).limit(1);
+          if (estado?.ai && estado.enabled && !estado.handoff && !estado.test) {
+            await encolarEnTransaccion(tx, organizationId, conversation.id, [rows[0].id]);
+          }
+        }
         return rows;
       })
     : await db.insert(schema.message).values(values)

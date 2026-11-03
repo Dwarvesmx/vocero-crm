@@ -74,7 +74,7 @@ jobs:
           PY
           echo "$REF" | tee image-reference.txt
           printf '### Imagen verificada\n\n%s\n\nFuente: %s\n\nPlataforma: linux/amd64\n' "$REF" "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
-      - name: Validar PDF y dependencia nativa en imagen final Linux
+      - name: Validar PDF y dependencia nativa en imagen final Linux Alpine
         shell: bash
         env:
           DIGEST: ${{ steps.build.outputs.digest }}

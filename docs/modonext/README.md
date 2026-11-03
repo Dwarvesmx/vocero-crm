@@ -49,7 +49,7 @@ Los contenedores conservan migraciones al arranque; no arrancar sus comandos por
 
 ## Publicación Linux V1
 
-Estado: EN CURSO. Se registrarán aquí commits de construcción, workflows, arquitectura, prueba del extractor/nativo y referencias completas por digest. Ningún workflow de publicación contiene despliegue a Coolify.
+Estado: BLOQUEADO por credencial de publicación rechazada por GitHub. No se publicaron los commits V1 ni se ejecutó Actions con ellos. Se registrarán aquí commits de construcción, workflows, arquitectura, prueba del extractor/nativo y referencias completas por digest cuando se restablezca el acceso autorizado. Ningún workflow de publicación contiene despliegue a Coolify.
 
 ## Pendientes comprobados y decisiones
 

@@ -15,6 +15,23 @@ describe("Configuración Zernio V1", () => {
  it("recupera solo datos enmascarados sin consultar al proveedor", async () => { const d = await (await GET()).json(); expect(d.connection.tokenLast4).toBe("1234"); expect(JSON.stringify(d)).not.toContain(credential.token); expect(JSON.stringify(d)).not.toContain(credential.secreto); expect(m.accounts).not.toHaveBeenCalled(); });
  it("impide administración a otro rol", async () => { m.role = "member"; expect((await GET()).status).toBe(403); expect((await PUT(request("PUT", {}))).status).toBe(403); expect((await POST(request("POST", { action: "accounts" }))).status).toBe(403); expect((await PATCH(request("PATCH", { enabled: false }))).status).toBe(403); });
  it("rechaza escrituras de otro origen", async () => { expect((await PUT(request("PUT", {}, "https://otro.test"))).status).toBe(403); });
+ it("acepta el dominio público real aunque Next reciba la URL interna del proxy", async () => {
+  vi.stubEnv("APP_BASE_URL", "https://crm.modonext.tech");
+  const req = new Request("http://localhost:3000/api/settings/whatsapp/zernio", { method: "POST", headers: { Origin: "https://crm.modonext.tech", "Content-Type": "application/json" }, body: JSON.stringify({ action: "accounts", token: "key-ficticia" }) });
+  expect((await POST(req)).status).toBe(200); expect(m.accounts).toHaveBeenCalledWith("key-ficticia");
+ });
+ it("rechaza orígenes ausentes, null, otro puerto o esquema y cabeceras reenviadas falsas", async () => {
+  vi.stubEnv("APP_BASE_URL", "https://crm.modonext.tech");
+  for (const origin of [null, "null", "http://crm.modonext.tech", "https://crm.modonext.tech:444", "https://otro.test", "https://crm.modonext.tech.evil.test"]) {
+   const headers = new Headers({ "Content-Type": "application/json", "X-Forwarded-Host": "crm.modonext.tech", "X-Forwarded-Proto": "https" }); if (origin) headers.set("Origin", origin);
+   const r = await POST(new Request("https://crm.modonext.tech/api/settings/whatsapp/zernio", { method: "POST", headers, body: JSON.stringify({ action: "accounts", token: "key-ficticia" }) })); expect(r.status).toBe(403);
+  }
+  expect(m.accounts).not.toHaveBeenCalled();
+ });
+ it("falla cerrado si falta o es inválida la URL pública configurada", async () => {
+  for (const value of ["", "no-es-url", "file:///tmp/config"]) { vi.stubEnv("APP_BASE_URL", value); expect((await POST(request("POST", { action: "accounts" }))).status).toBe(403); }
+  expect(m.accounts).not.toHaveBeenCalled();
+ });
  it("lista solo WhatsApp ModoNext sin selección automática", async () => { const d = await (await POST(request("POST", { action: "accounts", token: "falso" }))).json(); expect(d.accounts).toEqual([{ id: "modo", name: "ModoNext" }]); expect(m.save).not.toHaveBeenCalled(); });
  it("no acepta GH ni siquiera con su ID confirmado", async () => { expect((await PUT(request("PUT", { accountRef: "gh", confirmation: "gh" }))).status).toBe(422); expect(m.save).not.toHaveBeenCalled(); });
  it("guarda cifrado por el servicio existente y siempre apagado", async () => { expect((await PUT(request("PUT", { accountRef: "modo", confirmation: "modo", enabled: true }))).status).toBe(200); expect(m.save).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, token: credential.token, secreto: credential.secreto })); expect(m.transport).not.toHaveBeenCalled(); });

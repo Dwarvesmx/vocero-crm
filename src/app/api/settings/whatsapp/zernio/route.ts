@@ -13,7 +13,15 @@ function cuentasModoNext(accounts: ZernioAccount[]) {
   return accounts.filter(a => a.platform?.toLowerCase() === "whatsapp" && a.isActive !== false && a.enabled !== false && !a.needsReconnection &&
     !/ghinversiones/i.test(`${a.displayName ?? ""} ${a.username ?? ""}`.replace(/[^a-z0-9]/gi, "")) && /modonext/i.test(`${a.displayName ?? ""} ${a.username ?? ""}`.replace(/[^a-z0-9]/gi, "")));
 }
-function origin(req: Request) { return req.headers.get("origin") === new URL(req.url).origin; }
+// El proxy termina HTTPS: req.url puede ser http://localhost:3000.
+// La única autoridad es la URL pública configurada; no confiar en Host/Forwarded.
+function origin(req: Request) {
+  try {
+    const configured = new URL(process.env.APP_BASE_URL ?? "");
+    return ["https:", "http:"].includes(configured.protocol) &&
+      req.headers.get("origin") === configured.origin;
+  } catch { return false; }
+}
 const endpoint = () => `${process.env.APP_BASE_URL?.replace(/\/$/, "")}/api/webhooks/zernio-whatsapp`;
 const owner = (role: string) => role === "owner";
 const unavailable = () => apiError(503, "zernio_unavailable", "Zernio no respondió. No se ha confirmado la operación; comprueba el estado antes de repetirla.");

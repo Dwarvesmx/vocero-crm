@@ -1,4 +1,4 @@
-name: Publicar Zernio validado
+name: Publicar Zernio validado - origen público
 on:
   push:
     branches: [zernio-whatsapp]

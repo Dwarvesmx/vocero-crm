@@ -6,8 +6,8 @@ Registro técnico público sanitizado. Última actualización: 2026-11-03. Este 
 
 | Componente | Versión | Rama existente | Fuente V1 probada | Imagen V1 |
 |---|---|---|---|---|
-| Vocero CRM | 2.7.0 | [zernio-whatsapp](https://github.com/Dwarvesmx/vocero-crm/tree/zernio-whatsapp) | `e2c8086e6d24fe3991593fd5b62b00dfb65a75d4` | Validación Linux/publicación en curso |
-| Nea | 2.0.2 | [zernio-identidad-respuesta](https://github.com/Dwarvesmx/nea-agent/tree/zernio-identidad-respuesta) | `32f7d006c2c4131aa4ae57d984f83ddb50a60b04` | Publicación en curso |
+| Vocero CRM | 2.7.0 | [zernio-whatsapp](https://github.com/Dwarvesmx/vocero-crm/tree/zernio-whatsapp) | `e2c8086e6d24fe3991593fd5b62b00dfb65a75d4` | PROBADO Linux / fuente [`a659177`](https://github.com/Dwarvesmx/vocero-crm/commit/a65917720b6616479ce5d7fd5c9355566aea5506) |
+| Nea | 2.0.2 | [zernio-identidad-respuesta](https://github.com/Dwarvesmx/nea-agent/tree/zernio-identidad-respuesta) | `32f7d006c2c4131aa4ae57d984f83ddb50a60b04` | PROBADO Linux / fuente [`489aecd`](https://github.com/Dwarvesmx/nea-agent/commit/489aecd76da177eeace334d79bf78a77a11b91b6) |
 
 El HEAD documental exacto es el commit que GitHub muestra en este archivo; consultar también los historiales de [Vocero](https://github.com/Dwarvesmx/vocero-crm/commits/zernio-whatsapp/) y [Nea](https://github.com/Dwarvesmx/nea-agent/commits/zernio-identidad-respuesta/). Los commits de construcción y digests se fijan a continuación al terminar Actions; una actualización documental posterior no cambia la fuente de una imagen ya publicada.
 
@@ -47,14 +47,36 @@ Aplicación futura, NO ejecutada en producción:
 
 Los contenedores conservan migraciones al arranque; no arrancar sus comandos por defecto contra producción antes de autorizar esa operación. La validación Linux usa entrypoint de prueba, sin red, credenciales ni PostgreSQL. Reversión y particularidad de los fragmentos KB en imágenes antiguas: ver el informe V1; no revertir ciegamente ni borrar originales.
 
-## Publicación Linux V1
+## Publicación Linux V1 — PROBADO, sin despliegue
 
-Estado: BLOQUEADO por credencial de publicación rechazada por GitHub. No se publicaron los commits V1 ni se ejecutó Actions con ellos. Se registrarán aquí commits de construcción, workflows, arquitectura, prueba del extractor/nativo y referencias completas por digest cuando se restablezca el acceso autorizado. Ningún workflow de publicación contiene despliegue a Coolify.
+Ambos workflows terminaron **success**, plataforma **linux/amd64**. Se publicaron las ramas existentes sin merges ni force push. Los commits funcionales `e2c8086` y `32f7d00` se conservaron como ancestros; los únicos ajustes posteriores son documentación, publicación y corrección del empaquetado PDF.
+
+| Componente | Commit exacto de imagen | Workflow verificado |
+|---|---|---|
+| CRM | [`a65917720b6616479ce5d7fd5c9355566aea5506`](https://github.com/Dwarvesmx/vocero-crm/commit/a65917720b6616479ce5d7fd5c9355566aea5506) | [41619859513: success](https://github.com/Dwarvesmx/vocero-crm/actions/runs/41619859513) |
+| Nea | [`489aecd76da177eeace334d79bf78a77a11b91b6`](https://github.com/Dwarvesmx/nea-agent/commit/489aecd76da177eeace334d79bf78a77a11b91b6) | [41618549967: success](https://github.com/Dwarvesmx/nea-agent/actions/runs/41618549967) |
+
+Referencias inmutables que identifican los artefactos verificados:
+
+```text
+ghcr.io/dwarvesmx/vocero-crm@sha256:b520d2625aa39218824b26dc85c992972d1e8e092f5a1424e44eaef310c6e6b2
+ghcr.io/dwarvesmx/nea-agent@sha256:ffa90851bdedc7cf0ee0e398b32704a1a6baf9b32b42c5ef0a58f951a583a0ff
+```
+
+Etiquetas de trazabilidad: `2.7.0-zernio-a65917720b6616479ce5d7fd5c9355566aea5506` y `2.0.2-zernio-489aecd76da177eeace334d79bf78a77a11b91b6`. Para desplegar, usar el digest, no la etiqueta.
+
+Prueba PDF dentro del contenedor final Alpine, Node v22.23.4: extractor de producción y canvas nativo cargados; `servicios.pdf` devuelve el texto esperado; `sin-texto.pdf` rechazado. Hash SHA-256 del fixture, igual al blob Git: `f40cb86ac49316c2ee948f619689006966424d88c2ab8ca0c7512c88691757de`. Se ejecutó con red deshabilitada, sistema de archivos de solo lectura, usuario sin privilegios y sin arrancar el CRM/migrador. No se repitieron las 146 pruebas locales aprobadas.
+
+Corrección Linux acotada: trazado explícito de PDF.js/worker/canvas y copia del binario musl ya fijado en el lockfile a los cargadores canvas emitidos por standalone. No se modificaron las funciones V1, dependencias ni versiones. Los candidatos de [41618545376](https://github.com/Dwarvesmx/vocero-crm/actions/runs/41618545376) y [41619320616](https://github.com/Dwarvesmx/vocero-crm/actions/runs/41619320616) fallaron la validación y NO son referencias autorizadas para desplegar.
+
+Migraciones empaquetadas comprobadas byte a byte contra sus blobs Git: CRM 0031–0033; Nea 010. Ver hashes, límite de reversión y detalle en [el informe V1](MEJORAS_FUNCIONALES_V1_2026_11_03.md#publicacion-linux-y-verificacion-ghcr). Los índices/manifiestos/config de GHCR se comprobaron por SHA-256 con acceso anónimo; etiquetas OCI de revisión/versión y arquitectura coinciden. Provenance/SBOM generados por Actions; no se afirma firma keyless verificada.
+
+El HEAD documental puede avanzar después del commit de imagen: consultar el commit de este archivo y los historiales enlazados arriba. Esto no reconstruye ni cambia los digests registrados.
 
 ## Pendientes comprobados y decisiones
 
-1. Prioridad actual: terminar la validación PDF en imagen Linux/amd64 y verificar los dos artefactos por digest.
-2. Después: autorización expresa para despliegue coordinado/migraciones y prueba real supervisada. No autorizados en esta etapa.
+1. Prioridad siguiente: autorización expresa para desplegar la pareja verificada, con automatización pausada y migraciones en el orden documentado. Linux/PDF y los dos digests ya quedaron PROBADOS.
+2. Prueba real supervisada posterior al despliegue: sigue pendiente de autorización. No se enviaron mensajes ni se tocó producción en esta publicación.
 3. Mypy global Nea: seis errores en tres archivos ajenos a V1, detallados en el informe; mypy focalizado de los ocho módulos modificados aprobado. No ampliar publicación para corregirlos.
 4. Restauración productiva aislada no ensayada según la bitácora; no se presenta un respaldo exitoso como restauración comprobada.
 5. Límites V1: PDF requiere texto, sin OCR; consulta léxica en español, contexto acotado, anuncio documental sujeto al TTL del perfil; ver límites y recuperación en el informe.

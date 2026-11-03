@@ -1,6 +1,6 @@
 # Mejoras funcionales V1 — 2026-11-03
 
-Entorno: DEV local. Estado: PROBADO localmente con PostgreSQL 16 aislado, API Zernio/CRM simulada y Chrome headless. Sin publicación, imágenes, despliegue, cambios o mensajes productivos. `coolify_operations` permaneció `enabled=false`, verificado por lectura de `.codex/config.toml`.
+Entorno de la implementación: DEV local, PROBADO con PostgreSQL 16 aislado, API Zernio/CRM simulada y Chrome headless. Publicación e imagen Linux verificadas posteriormente según el apartado final y el índice maestro; sin despliegue, cambios ni mensajes productivos. `coolify_operations` permaneció `enabled=false`, verificado por lectura de `.codex/config.toml`.
 
 La incidencia anterior fue declarada cerrada por el propietario tras su corrección manual y respuesta real de Lukas. No se volvió a investigar ni modificar esa configuración.
 
@@ -86,7 +86,7 @@ Los fixtures PDF/DOCX tienen reglas binarias acotadas en `.gitattributes` para c
 
 ## Pendientes concretos (estado al cierre local)
 
-La publicación y la validación Linux fueron autorizadas posteriormente y su resultado vigente figura en [el índice maestro](README.md). El despliegue sigue pendiente de autorización. El build Windows no prueba el empaquetado Linux del lector PDF y su worker/canvas nativo; validar extracción de los fixtures dentro de la futura imagen antes de desplegar. Para prueba real, autorizar migraciones aditivas, actualizar CRM y después Nea con automatización pausada; comprobar aviso y pausa desde una conversación supervisada. No afirmar entrega externa validada en esta etapa.
+La publicación y la validación Linux fueron autorizadas posteriormente y su resultado vigente figura en [el índice maestro](README.md). El despliegue sigue pendiente de autorización. El límite del empaquetado Linux pendiente en el cierre local quedó resuelto mediante la prueba real documentada al final. Para prueba real, autorizar migraciones aditivas, actualizar CRM y después Nea con automatización pausada; comprobar aviso y pausa desde una conversación supervisada. No afirmar entrega externa validada en esta etapa.
 
 Documentos nuevos pueden tardar hasta el TTL existente del perfil (cinco minutos) en anunciarse a Nea. Deshabilitación/eliminación se respetan en la siguiente consulta documental, sin esperar ese TTL. La ventana de contexto es acotada y la búsqueda léxica puede omitir información sin términos compartidos; validar el material real desde la vista previa y una prueba autorizada.
 
@@ -99,3 +99,31 @@ Documentos nuevos pueden tardar hasta el TTL existente del perfil (cinco minutos
 - PostgreSQL local de pruebas volvió al estado detenido en que estaba al comenzar; se conservaron cluster y credencial sintética. No se descargó ni utilizó información productiva.
 - Sin push, publicación de imágenes, despliegue ni operación productiva. Operations deshabilitado.
 
+
+## Publicación Linux y verificación GHCR
+
+2026-11-03: PROBADO en GitHub Actions y registro, sin despliegue. Autenticación mediante GitHub CLI/keyring; no se cargó el token inválido del .env ni se modificaron otras credenciales. Las referencias completas, commits y workflows vigentes están en [el índice maestro](README.md#publicación-linux-v1--probado-sin-despliegue); no se mantiene otro inventario paralelo.
+
+Fallos concretos observados y corregidos exclusivamente en empaquetado:
+
+1. El primer contenedor standalone omitía package.json/recursos de PDF.js. Se añadieron inclusiones de trazado acotadas a su cierre de dependencias pnpm.
+2. Al emitir las dependencias enlazadas, standalone dejó el cargador canvas sin su binario musl resoluble. Se copia el binario de la dependencia ya instalada al nombre relativo que ese cargador busca. No se cambió ninguna versión ni función del lector.
+3. La imagen final pasó `scripts/check-kb-linux.mjs`: linux/x64, Node v22.23.4, canvas nativo funcional, extractor de producción funcional, texto esperado extraído y PDF sin texto rechazado. El fixture coincide con el blob Git. La prueba no inicia migraciones, servidor, conexiones ni mensajes.
+
+Hashes SHA-256 de SQL en imagen, iguales a Git (comparación con blobs LF, independiente de CRLF del equipo Windows):
+
+| Recurso | Migración | SHA-256 |
+|---|---|---|
+| CRM | 0031_cold_smiling_tiger.sql | b9ec3e2269722cf144382d1321d61fb795bce356b782b5b7665ed15986de1d95 |
+| CRM | 0032_even_wind_dancer.sql | 3b6e90ce214b5bad84fcc155191b4069befcecdd8bf7220de496f3ea4cae8ec0 |
+| CRM | 0033_giant_inertia.sql | 958a99b92c621e6b33855c199fbab1b64ebb54e23fd3a8895abf7f60be6e7f1b |
+| Nea | 010_pending_handoff.sql | 8db0681cbad9331394ab16ef9a69ce7aabaae018c09826b5f052211b6861f3ed |
+
+Verificación anónima independiente del registro (índice, manifiesto y config íntegros por SHA-256, revisión/versiones OCI exactas):
+
+| Componente | Manifiesto linux/amd64 | Config |
+|---|---|---|
+| CRM | sha256:bdf58afaac59195779b791d6b0130fcd2d44618733fdb69717182b283fe441f9 | sha256:775415cf4f059681b930c94a028c87435f6a5d6183fd88547b8f2d889fae3a26 |
+| Nea | sha256:6cc7b9fad96babd561bdbcade4d51d7c1de9c96b9213b08631b43df549dcc0fa | sha256:01452279bb01a146a209bf8cca51fb0d4f1fbf62409fac0fad7e23f8e2f0f17e |
+
+La ejecución conserva flags apagados en las imágenes y no contiene despliegue a Coolify. Compatibilidad coordinada: migraciones aditivas y contrato compatible; primero CRM y después Nea, con pausa global y respaldos acordados. No se probó un arranque de aplicaciones contra datos productivos ni una restauración; las garantías de reversión siguen siendo las del apartado correspondiente. Las 146 pruebas locales no se repitieron. El índice público no incorpora la bitácora histórica ni datos de clientes; su original permanece local fuera de publicación.

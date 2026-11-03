@@ -19,7 +19,7 @@ beforeEach(() => {
   const db = { select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ text: "hola" }] }) }) }),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
   vi.mocked(getDb).mockReturnValue(db as never);
-  vi.mocked(obtenerZernioWhatsAppPorOrg).mockResolvedValue({ organizationId: "org1", accountRef: "cuenta1", token: "falso", secreto: "falso" });
+  vi.mocked(obtenerZernioWhatsAppPorOrg).mockResolvedValue({ enabled: true, webhookPending: false, organizationId: "org1", accountRef: "cuenta1", token: "falso", secreto: "falso" });
 });
 describe("worker de envíos", () => {
   it("confirma aceptación sin marcar entrega", async () => {

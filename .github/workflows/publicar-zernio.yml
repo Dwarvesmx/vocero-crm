@@ -17,13 +17,13 @@ jobs:
       contents: read
       packages: write
     env:
-      SOURCE_SHA: e87b7aea4f8af6f4160969a3e8a1fe1b76b6c7d7
+      SOURCE_SHA: ${{ github.sha }}
       IMAGE: ghcr.io/dwarvesmx/vocero-crm
       VERSION: 2.7.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: e87b7aea4f8af6f4160969a3e8a1fe1b76b6c7d7
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Comprobar fuente exacta
         shell: bash
@@ -42,13 +42,13 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/dwarvesmx/vocero-crm:2.7.0-zernio-e87b7aea4f8af6f4160969a3e8a1fe1b76b6c7d7
+          tags: ghcr.io/dwarvesmx/vocero-crm:2.7.0-zernio-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/Dwarvesmx/vocero-crm
-            org.opencontainers.image.revision=e87b7aea4f8af6f4160969a3e8a1fe1b76b6c7d7
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=2.7.0
           build-args: |
-            SOURCE_COMMIT=e87b7aea4f8af6f4160969a3e8a1fe1b76b6c7d7
+            SOURCE_COMMIT=${{ github.sha }}
           provenance: mode=max
           sbom: true
       - name: Verificar artefacto publicado
@@ -76,7 +76,7 @@ jobs:
           printf '### Imagen verificada\n\n%s\n\nFuente: %s\n\nPlataforma: linux/amd64\n' "$REF" "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: evidencia-vocero-crm-e87b7aea4f8af6f4160969a3e8a1fe1b76b6c7d7
+          name: evidencia-vocero-crm-${{ github.sha }}
           path: |
             manifest.txt
             image-inspect.json

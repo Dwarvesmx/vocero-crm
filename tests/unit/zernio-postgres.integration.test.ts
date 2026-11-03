@@ -3,7 +3,7 @@ import { getSql } from "@/lib/db";
 import { guardarEvento, tomarEvento } from "@/server/webhooks/eventos";
 import { barrido, detenerBarrido, procesarEvento } from "@/server/webhooks/worker";
 import { programarFallosDePrueba } from "@/server/dev/webhook-fallo";
-import { guardarZernioWhatsApp } from "@/server/zernio/whatsapp-credenciales";
+import { guardarZernioWhatsApp, obtenerZernioWhatsAppPorOrg, obtenerZernioWhatsAppPorCuenta } from "@/server/zernio/whatsapp-credenciales";
 import { barrerEnviosWhatsAppZernio, detenerEnviosWhatsAppZernio, encolarEnvioWhatsAppZernio } from "@/server/zernio/whatsapp-outbox";
 import { listMessages, updateConversation } from "@/server/inbox/queries";
 import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
@@ -52,10 +52,22 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
     await sql`delete from organization where id=${org}`;
     await sql`insert into organization (id, name) values (${org}, 'Prueba aislada')`;
     await sql`insert into pipeline_stage (id, organization_id, name, position) values ('stage_zernio_prueba', ${org}, 'Nuevo', 0)`;
-    await guardarZernioWhatsApp({ organizationId: org, accountRef: cuenta, token: "token-ficticio", secreto: "secreto-ficticio" });
+    await guardarZernioWhatsApp({ organizationId: org, accountRef: cuenta, token: "token-ficticio", secreto: "secreto-ficticio", enabled: true });
     process.env.WA_MOCK_ENABLED = "true";
   });
   afterAll(async () => { detenerBarrido(); vi.unstubAllGlobals(); if (sql) await sql.end(); });
+
+  it("guarda credenciales cifradas sin activar y recupera la configuración inactiva", async () => {
+    await sql`insert into organization (id, name) values ('org_config_prueba', 'Configuración ficticia') on conflict do nothing`;
+    try {
+      await guardarZernioWhatsApp({ organizationId: "org_config_prueba", accountRef: "cuenta_config", token: "token-config-ficticio", secreto: "firma-config-ficticia" });
+      expect(await obtenerZernioWhatsAppPorOrg("org_config_prueba")).toBeNull();
+      expect(await obtenerZernioWhatsAppPorCuenta("cuenta_config")).toBeNull();
+      expect(await obtenerZernioWhatsAppPorOrg("org_config_prueba", true)).toMatchObject({ token: "token-config-ficticio", enabled: false });
+      const [row] = await sql`select token_cipher, secret_cipher, enabled from zernio_whatsapp_credentials where organization_id='org_config_prueba'`;
+      expect(row!.token_cipher).not.toBe("token-config-ficticio"); expect(row!.secret_cipher).not.toBe("firma-config-ficticia"); expect(row!.enabled).toBe(false);
+    } finally { await sql`delete from organization where id='org_config_prueba'`; }
+  });
 
   it("procesa la ingesta de texto con la base aislada", async () => {
     await expect(procesarEntranteWhatsAppZernio(evento("ev_debug", "wamid_debug"))).resolves.toBeUndefined();

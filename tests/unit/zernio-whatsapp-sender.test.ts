@@ -13,7 +13,7 @@ vi.mock("@/lib/db", async (original) => ({ ...(await original<typeof import("@/l
 }) }));
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("ZERNIO_WHATSAPP_ENABLED", "true");
-  vi.mocked(obtenerZernioWhatsAppPorOrg).mockResolvedValue({ organizationId: "org1", accountRef: "cuenta1", token: "falso", secreto: "falso" });
+  vi.mocked(obtenerZernioWhatsAppPorOrg).mockResolvedValue({ enabled: true, webhookPending: false, organizationId: "org1", accountRef: "cuenta1", token: "falso", secreto: "falso" });
   vi.mocked(encolarEnvioWhatsAppZernio).mockResolvedValue("msg1");
 });
 afterEach(() => vi.unstubAllEnvs());

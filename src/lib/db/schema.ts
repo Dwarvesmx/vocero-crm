@@ -544,6 +544,8 @@ export const zernioWhatsappCredentials = pgTable(
     id: text("id").primaryKey(),
     organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
     accountRef: text("account_ref").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    webhookPending: boolean("webhook_pending").notNull().default(false),
     tokenCipher: text("token_cipher").notNull(),
     tokenIv: text("token_iv").notNull(),
     tokenTag: text("token_tag").notNull(),

@@ -23,7 +23,7 @@ export async function autorizarSalidaZernio(id: string) {
     const [msg] = await tx.select().from(schema.message).where(and(eq(schema.message.id, job.messageId), eq(schema.message.organizationId, job.organizationId))).limit(1);
     const now = new Date();
     const valid = conv && profile?.enabled && conv.aiEnabled && !conv.handoffAt && !conv.isTest &&
-      conv.channel === "whatsapp" && conv.channelThreadRef === job.threadRef && cred?.accountRef === job.accountRef &&
+      cred?.enabled && conv.channel === "whatsapp" && conv.channelThreadRef === job.threadRef && cred?.accountRef === job.accountRef &&
       msg?.aiGenerated && msg.origin === "ai" && msg.conversationId === conv.id && msg.text && job.requestKey.startsWith("nea:") &&
       conv.lastInboundAt && now.getTime() - conv.lastInboundAt.getTime() >= 0 &&
       now.getTime() - conv.lastInboundAt.getTime() < 86400000 && now.getTime() - job.createdAt.getTime() < 23 * 3600000;

@@ -1,0 +1,1 @@
+ALTER TABLE "zernio_whatsapp_credentials" ADD COLUMN "enabled" boolean DEFAULT false NOT NULL;

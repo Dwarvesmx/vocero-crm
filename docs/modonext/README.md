@@ -9,7 +9,7 @@ Registro técnico público sanitizado. Última actualización: 2026-11-03. Este 
 | Vocero CRM | 2.7.0 | [zernio-whatsapp](https://github.com/Dwarvesmx/vocero-crm/tree/zernio-whatsapp) | `e2c8086e6d24fe3991593fd5b62b00dfb65a75d4` | PROBADO Linux / fuente [`a659177`](https://github.com/Dwarvesmx/vocero-crm/commit/a65917720b6616479ce5d7fd5c9355566aea5506) |
 | Nea | 2.0.2 | [zernio-identidad-respuesta](https://github.com/Dwarvesmx/nea-agent/tree/zernio-identidad-respuesta) | `32f7d006c2c4131aa4ae57d984f83ddb50a60b04` | PROBADO Linux / fuente [`489aecd`](https://github.com/Dwarvesmx/nea-agent/commit/489aecd76da177eeace334d79bf78a77a11b91b6) |
 
-El HEAD documental exacto es el commit que GitHub muestra en este archivo; consultar también los historiales de [Vocero](https://github.com/Dwarvesmx/vocero-crm/commits/zernio-whatsapp/) y [Nea](https://github.com/Dwarvesmx/nea-agent/commits/zernio-identidad-respuesta/). Los commits de construcción y digests se fijan a continuación al terminar Actions; una actualización documental posterior no cambia la fuente de una imagen ya publicada.
+El HEAD documental exacto es el commit que GitHub muestra en este archivo; consultar también los historiales de [Vocero](https://github.com/Dwarvesmx/vocero-crm/commits/zernio-whatsapp/) y [Nea](https://github.com/Dwarvesmx/nea-agent/commits/zernio-identidad-respuesta/). Los commits de construcción y digests verificados se registran a continuación; una actualización documental posterior no cambia la fuente de una imagen ya publicada.
 
 ## Producción: última versión registrada, distinta de DEV
 
@@ -69,7 +69,7 @@ Prueba PDF dentro del contenedor final Alpine, Node v22.23.4: extractor de produ
 
 Corrección Linux acotada: trazado explícito de PDF.js/worker/canvas y copia del binario musl ya fijado en el lockfile a los cargadores canvas emitidos por standalone. No se modificaron las funciones V1, dependencias ni versiones. Los candidatos de [41618545376](https://github.com/Dwarvesmx/vocero-crm/actions/runs/41618545376) y [41619320616](https://github.com/Dwarvesmx/vocero-crm/actions/runs/41619320616) fallaron la validación y NO son referencias autorizadas para desplegar.
 
-Migraciones empaquetadas comprobadas byte a byte contra sus blobs Git: CRM 0031–0033; Nea 010. Ver hashes, límite de reversión y detalle en [el informe V1](MEJORAS_FUNCIONALES_V1_2026_11_03.md#publicacion-linux-y-verificacion-ghcr). Los índices/manifiestos/config de GHCR se comprobaron por SHA-256 con acceso anónimo; etiquetas OCI de revisión/versión y arquitectura coinciden. Provenance/SBOM generados por Actions; no se afirma firma keyless verificada.
+Migraciones empaquetadas comprobadas byte a byte contra sus blobs Git: CRM 0031–0033; Nea 010. Ver hashes, límite de reversión y detalle en [el informe V1](MEJORAS_FUNCIONALES_V1_2026_11_03.md#publicación-linux-y-verificación-ghcr). Los índices/manifiestos/config de GHCR se comprobaron por SHA-256 con acceso anónimo; etiquetas OCI de revisión/versión y arquitectura coinciden. Provenance/SBOM generados por Actions; no se afirma firma keyless verificada.
 
 El HEAD documental puede avanzar después del commit de imagen: consultar el commit de este archivo y los historiales enlazados arriba. Esto no reconstruye ni cambia los digests registrados.
 

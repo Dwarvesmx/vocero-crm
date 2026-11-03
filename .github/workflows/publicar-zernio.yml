@@ -1,4 +1,4 @@
-name: Publicar V1 validado Linux
+name: Publicar V1 Linux validado
 on:
   push:
     branches: [zernio-whatsapp]

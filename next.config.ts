@@ -13,6 +13,16 @@ const nextConfig: NextConfig = {
   output: process.platform === "win32" ? undefined : "standalone",
   // El paquete `postgres` usa APIs de Node que no deben empaquetarse en el bundle.
   serverExternalPackages: ["postgres", "pdf-parse", "mammoth"],
+  // PDF.js carga worker y canvas/nativos dinámicamente: NFT no los detectó
+  // en la prueba real de la imagen Alpine. Incluir solo esa dependencia y
+  // su cierre instalado por pnpm, conservando la resolución de sus enlaces.
+  outputFileTracingIncludes: {
+    "/api/kb/documents{,/**}": [
+      "./node_modules/.pnpm/pdf-parse@*/node_modules/**/*",
+      "./node_modules/.pnpm/pdfjs-dist@*/node_modules/**/*",
+      "./node_modules/.pnpm/@napi-rs+canvas*@*/node_modules/**/*",
+    ],
+  },
   // 061 — El indicador de Next en modo dev caía encima de la cuenta del riel
   // (abajo a la izquierda) y tapaba el clic. Solo existe en dev; los errores
   // de compilación se siguen mostrando en su panel.

@@ -1,0 +1,2 @@
+CREATE INDEX "kb_document_chunks_idx" ON "kb_entry" USING btree ("document_id");--> statement-breakpoint
+CREATE INDEX "kb_content_search_idx" ON "kb_entry" USING gin (to_tsvector('spanish', coalesce("content", '')));

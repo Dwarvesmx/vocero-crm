@@ -13,6 +13,7 @@ type KbEntry = typeof schema.kbEntry.$inferSelect;
 export const JUDGE_MARKER = "[JUEZ]";
 
 export function renderKb(entries: KbEntry[]): string {
+  entries = entries.filter(e => !e.documentId);
   if (entries.length === 0) return "(knowledge base vacío)";
   return entries
     .map((e) =>

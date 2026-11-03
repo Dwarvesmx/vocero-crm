@@ -23,7 +23,7 @@ export function politicaEnvioZernio(status: number, attempts: number, edadMs: nu
 
 export async function encolarEnvioWhatsAppZernio(input: {
   organizationId: string; conversationId: string; accountRef: string;
-  threadRef: string; text: string; requestKey: string; aiGenerated?: boolean;
+  threadRef: string; text: string; requestKey: string; aiGenerated?: boolean; handoffReason?: string;
 }) {
   const db = getDb();
   const buscar = async () => (await db.select({ job: schema.zernioWhatsappOutbox, text: schema.message.text, aiGenerated: schema.message.aiGenerated })
@@ -32,7 +32,7 @@ export async function encolarEnvioWhatsAppZernio(input: {
   const validar = (previo: NonNullable<Awaited<ReturnType<typeof buscar>>>) => {
     if (previo.job.conversationId !== input.conversationId || previo.text !== input.text ||
         previo.job.accountRef !== input.accountRef || previo.job.threadRef !== input.threadRef ||
-        Boolean(previo.aiGenerated) !== Boolean(input.aiGenerated)) {
+        Boolean(previo.aiGenerated) !== Boolean(input.aiGenerated) || (previo.job.handoffReason ?? null) !== (input.handoffReason ?? null)) {
       throw new Error("La clave ya corresponde a otra solicitud");
     }
     return previo.job.messageId;
@@ -41,6 +41,10 @@ export async function encolarEnvioWhatsAppZernio(input: {
   if (previo) return validar(previo);
   const messageId = newId("message");
   try { await db.transaction(async (tx) => {
+    if (input.aiGenerated) {
+      const [conv] = await tx.select().from(schema.conversation).where(and(eq(schema.conversation.id, input.conversationId), eq(schema.conversation.organizationId, input.organizationId))).for("update");
+      if (!conv || !conv.aiEnabled || conv.handoffAt || conv.handoffPendingMessageId) throw new Error("Atención humana pendiente o activa");
+    }
     await tx.insert(schema.message).values({ id: messageId, organizationId: input.organizationId,
       conversationId: input.conversationId, direction: "out", type: "text", text: input.text,
       status: "pending", origin: input.aiGenerated ? "ai" : "operator", aiGenerated: input.aiGenerated ?? false });
@@ -48,7 +52,8 @@ export async function encolarEnvioWhatsAppZernio(input: {
       organizationId: input.organizationId, conversationId: input.conversationId, messageId,
       accountRef: input.accountRef, threadRef: input.threadRef, requestKey: input.requestKey,
       // Se registra la intención sin habilitar el transporte automático.
-      status: input.aiGenerated ? "retenido" : "pendiente" });
+      status: input.aiGenerated ? "retenido" : "pendiente", handoffReason: input.aiGenerated ? input.handoffReason : null });
+    if (input.aiGenerated && input.handoffReason) await tx.update(schema.conversation).set({ handoffPendingMessageId: messageId }).where(eq(schema.conversation.id, input.conversationId));
     await tx.update(schema.conversation).set({ lastMessageAt: new Date(), updatedAt: new Date() })
       .where(and(eq(schema.conversation.id, input.conversationId), eq(schema.conversation.organizationId, input.organizationId)));
   }); } catch (error) {

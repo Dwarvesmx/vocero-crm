@@ -1,4 +1,5 @@
 import { and, eq, lte } from "drizzle-orm";
+import { publish } from "@/server/events/bus";
 import { getDb, schema } from "@/lib/db";
 import { descifrar } from "./whatsapp-credenciales";
 import { enviarTextoWhatsAppZernio } from "./whatsapp-envio";
@@ -23,7 +24,7 @@ export async function autorizarSalidaZernio(id: string) {
     const [msg] = await tx.select().from(schema.message).where(and(eq(schema.message.id, job.messageId), eq(schema.message.organizationId, job.organizationId))).limit(1);
     const now = new Date();
     const valid = conv && profile?.enabled && conv.aiEnabled && !conv.handoffAt && !conv.isTest &&
-      cred?.enabled && conv.channel === "whatsapp" && conv.channelThreadRef === job.threadRef && cred?.accountRef === job.accountRef &&
+      (job.handoffReason ? conv.handoffPendingMessageId === job.messageId : !conv.handoffPendingMessageId) && cred?.enabled && conv.channel === "whatsapp" && conv.channelThreadRef === job.threadRef && cred?.accountRef === job.accountRef &&
       msg?.aiGenerated && msg.origin === "ai" && msg.conversationId === conv.id && msg.text && job.requestKey.startsWith("nea:") &&
       conv.lastInboundAt && now.getTime() - conv.lastInboundAt.getTime() >= 0 &&
       now.getTime() - conv.lastInboundAt.getTime() < 86400000 && now.getTime() - job.createdAt.getTime() < 23 * 3600000;
@@ -51,11 +52,21 @@ export async function liberarSalidaZernio(id: string) {
     await marcarIncierto(job.id, job.attempts);
     return;
   }
-  await getDb().transaction(async (tx) => {
+  const result = await getDb().transaction(async (tx) => {
+    let paused = false;
+    const [conv] = await tx.select().from(schema.conversation).where(eq(schema.conversation.id, job.conversationId)).for("update");
     const [done] = await tx.update(schema.zernioWhatsappOutbox).set({ status: "completado", leasedUntil: null, updatedAt: new Date() })
       .where(and(eq(schema.zernioWhatsappOutbox.id, job.id), eq(schema.zernioWhatsappOutbox.status, "iniciado"), eq(schema.zernioWhatsappOutbox.attempts, job.attempts))).returning();
+    if (done && job.handoffReason && conv?.handoffPendingMessageId === job.messageId && conv.aiEnabled && !conv.handoffAt) {
+      paused = true;
+      await tx.update(schema.conversation).set({ aiEnabled: false, handoffAt: new Date(), handoffReason: job.handoffReason as typeof conv.handoffReason, handoffPendingMessageId: null, updatedAt: new Date() }).where(eq(schema.conversation.id, conv.id));
+    }
     if (done) await tx.update(schema.message).set({ status: "sent", waMessageId: wamid, error: null }).where(eq(schema.message.id, job.messageId));
+    return { paused, done: Boolean(done) };
   });
+  if (!result.done) return;
+  publish(job.organizationId, { type: "message.status", data: { conversationId: job.conversationId, messageId: job.messageId, status: "sent", error: null } });
+  if (result.paused) publish(job.organizationId, { type: "conversation.updated", data: { conversation: { id: job.conversationId, aiEnabled: false, handoffReason: job.handoffReason } } });
 }
 
 async function marcarIncierto(id: string, attempts: number) {

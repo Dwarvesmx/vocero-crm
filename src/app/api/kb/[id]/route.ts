@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
@@ -27,7 +27,8 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
       scoped(
         schema.kbEntry.organizationId,
         session.organizationId,
-        eq(schema.kbEntry.id, id)
+        eq(schema.kbEntry.id, id),
+        isNull(schema.kbEntry.documentId)
       )
     )
     .returning();
@@ -44,7 +45,8 @@ export const DELETE = withAuth(async (session, _req: Request, ctx: Params) => {
       scoped(
         schema.kbEntry.organizationId,
         session.organizationId,
-        eq(schema.kbEntry.id, id)
+        eq(schema.kbEntry.id, id),
+        isNull(schema.kbEntry.documentId)
       )
     )
     .returning();

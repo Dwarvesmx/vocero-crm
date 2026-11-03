@@ -375,6 +375,7 @@ export const conversation = pgTable(
     channelThreadRef: text("channel_thread_ref"),
     aiEnabled: boolean("ai_enabled").notNull().default(true),
     handoffAt: timestamp("handoff_at"),
+    handoffPendingMessageId: text("handoff_pending_message_id"),
     handoffReason: text("handoff_reason", {
       // 008: manual_reply = el dueño respondió desde la app del teléfono.
       // hostilidad = el lead se puso agresivo y el agente se retiró.
@@ -570,6 +571,7 @@ export const zernioWhatsappOutbox = pgTable("zernio_whatsapp_outbox", {
   accountRef: text("account_ref").notNull(),
   threadRef: text("thread_ref").notNull(),
   requestKey: text("request_key").notNull(),
+  handoffReason: text("handoff_reason"),
   status: text("status", { enum: ["pendiente", "procesando", "completado", "fallido", "retenido", "iniciado", "cancelado", "incierto"] }).notNull().default("pendiente"),
   attempts: integer("attempts").notNull().default(0),
   notBefore: timestamp("not_before").notNull().defaultNow(),
@@ -749,6 +751,22 @@ export const agentProfile = pgTable(
   (t) => [uniqueIndex("agent_profile_org_uq").on(t.organizationId)]
 );
 
+/** Originales persistentes y estado recuperable del procesamiento documental. */
+export const kbDocument = pgTable("kb_document", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, {onDelete:"cascade"}),
+  name: text("name").notNull(),
+  mime: text("mime").notNull(),
+  sha256: text("sha256").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  status: text("status", {enum:["processing","ready","error","deleting"]}).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  error: text("error"),
+  leasedUntil: timestamp("leased_until"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => [uniqueIndex("kb_document_org_sha_uq").on(t.organizationId,t.sha256)]);
+
 export const kbEntry = pgTable(
   "kb_entry",
   {
@@ -757,13 +775,18 @@ export const kbEntry = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     kind: text("kind", { enum: ["qa", "block"] }).notNull(),
+    documentId: text("document_id").references(() => kbDocument.id, {onDelete:"cascade"}),
     question: text("question"),
     answer: text("answer"),
     content: text("content"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [index("kb_org_idx").on(t.organizationId)]
+  (t) => [
+    index("kb_org_idx").on(t.organizationId),
+    index("kb_document_chunks_idx").on(t.documentId),
+    index("kb_content_search_idx").using("gin", sql`to_tsvector('spanish', coalesce(${t.content}, ''))`),
+  ]
 );
 
 export const template = pgTable(

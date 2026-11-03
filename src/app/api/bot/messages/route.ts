@@ -8,6 +8,7 @@ import { getDb, schema } from "@/lib/db";
 import { apiError, parseBody } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
 import { AiPausedError, SendError, sendText } from "@/server/inbox/send";
+import { toHandoffReason } from "@/server/bot/handoff";
 import { guardarRespuestaDePrueba } from "@/server/lab/sandbox";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ const bodySchema = z.object({
   text: z.string().min(1).max(MAX_TEXT_CHARS_ANY_CHANNEL, TEXT_TOO_LONG_ANY_CHANNEL),
   // Un UUID distinto por respuesta lógica. Opcional para clientes heredados.
   responseId: z.string().uuid().optional(),
+  handoffReason: z.string().max(128).optional(),
 });
 
 /**
@@ -85,9 +87,10 @@ export async function POST(req: Request) {
       organizationId,
       text: body.data.text,
       aiGenerated: true,
+      ...(body.data.handoffReason ? { handoffReason: toHandoffReason(body.data.handoffReason) } : {}),
       requestKey: body.data.responseId ? `nea:${body.data.responseId.toLowerCase()}` : undefined,
     });
-    return Response.json({ messageId: result.messageId });
+    return Response.json({ messageId: result.messageId, ...(result.handoffManaged ? { handoffManaged: true } : {}) });
   } catch (err) {
     if (err instanceof AiPausedError) {
       return apiError(409, "ai_paused", err.message);

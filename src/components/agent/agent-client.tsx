@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { guardarConfiguracionAgente } from "@/lib/agent-save";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { KbDocuments } from "@/components/agent/kb-documents";
 import { BrainStatusCard } from "@/components/agent/brain-status-card";
 import { externalDown, type BrainStatusDto } from "@/lib/brain-status";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +47,14 @@ export function AgentClient() {
   const [entries, setEntries] = useState<KbEntry[]>([]);
   const [kbSize, setKbSize] = useState<{ chars: number; warnAt: number; warning: boolean } | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [kbDirty, setKbDirty] = useState(false);
+  const [documentDirty, setDocumentDirty] = useState(false);
+  const dirty = profileDirty || kbDirty || documentDirty;
+  const [presetRevision, setPresetRevision] = useState(0);
   // 036 — Por qué no se pudo encender (409 `sin_cerebro`): el mensaje del
   // servidor, tal cual, junto al interruptor.
   const [switchError, setSwitchError] = useState<string | null>(null);
@@ -68,11 +78,13 @@ export function AgentClient() {
       loadBrain(),
     ]).catch(() => [null, null, null]);
     if (p) {
+      setLoadError(null);
       setProfile(p.profile);
       setAiConfigured(p.aiConfigured);
       setAiMensaje(p.aiMensaje ?? null);
       setAgendaEnabled(p.agendaEnabled === true);
     }
+    if (!p) setLoadError("No se pudo cargar la configuración del agente. Intenta de nuevo.");
     if (kb) setEntries(kb.entries);
     if (size) setKbSize(size);
   }, [loadBrain]);
@@ -86,53 +98,62 @@ export function AgentClient() {
     return () => clearInterval(id);
   }, [loadBrain]);
 
+  useEffect(() => {
+    if (!dirty) return;
+    const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    const navigate = (e: MouseEvent) => {
+      const a = (e.target as Element).closest?.("a[href]");
+      if (a && !e.defaultPrevented && !window.confirm("Hay cambios sin guardar. ¿Salir y descartarlos?")) { e.preventDefault(); e.stopPropagation(); }
+    };
+    const navigation = (window as unknown as {navigation?: EventTarget}).navigation;
+    const traverse = (e: Event) => {
+      if ((e as Event & {navigationType?: string}).navigationType === "traverse" && e.cancelable &&
+          !window.confirm("Hay cambios sin guardar. ¿Salir y descartarlos?")) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", unload);
+    document.addEventListener("click", navigate, true);
+    navigation?.addEventListener("navigate", traverse);
+    return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", navigate, true); navigation?.removeEventListener("navigate", traverse); };
+  }, [dirty]);
+
   if (!profile) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Cargando…
+        {loadError ? <div role="alert">{loadError} <Button onClick={() => void refetch()}>Reintentar</Button></div> : "Cargando…"}
       </div>
     );
   }
 
   async function cargarPreset() {
+    if (saving) return;
     const ok = window.confirm(
       `Cargar el rol «${ROLES.calificador.etiqueta}» reemplaza las instrucciones y las reglas de escalado, y enciende todas sus herramientas. ¿Continuar?`
     );
     if (!ok) return;
-    await fetch("/api/agent/profile/preset", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ role: "calificador" }),
-    }).catch(() => null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    void refetch();
+    setSaving(true); setSaved(false); setSaveError(null);
+    try {
+      const data = await guardarConfiguracionAgente("/api/agent/profile/preset", "POST", {role:"calificador"});
+      if (!data.profile) throw new Error("No se pudo confirmar el perfil guardado. Recarga para consultarlo.");
+      setProfile(data.profile);
+      setProfileDirty(false); setPresetRevision((n) => n + 1); setSaved(true);
+    } catch (e) { setSaveError(e instanceof Error ? e.message : "No se pudo guardar el rol."); }
+    finally { setSaving(false); }
   }
 
   async function saveProfile(patch: Partial<Profile>): Promise<boolean> {
-    const res = await fetch("/api/agent/profile", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(patch),
-    }).catch(() => null);
-    if (!res?.ok) {
-      const data = (await res?.json().catch(() => null)) as {
-        error?: { message?: string };
-      } | null;
-      if (patch.enabled !== undefined) {
-        setSwitchError(
-          data?.error?.message ??
-            (patch.enabled ? "No se pudo encender el agente." : "No se pudo apagar el agente.")
-        );
-      }
-      void refetch();
+    if (saving) return false;
+    setSaving(true); setSaved(false); setSaveError(null);
+    try {
+      await guardarConfiguracionAgente("/api/agent/profile", "PUT", patch);
+      setProfile((p) => p ? {...p, ...patch} : p);
+      setSwitchError(null); setSaved(true);
+      return true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "No se pudo guardar. Tus cambios se conservan.";
+      setSaveError(message);
+      if (patch.enabled !== undefined) setSwitchError(message);
       return false;
-    }
-    if (patch.enabled !== undefined) setSwitchError(null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    void refetch();
-    return true;
+    } finally { setSaving(false); }
   }
 
   // 036 — El interruptor solo se enciende con un agente conectado (el
@@ -152,7 +173,9 @@ export function AgentClient() {
       <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-6 sm:py-4">
         <h2 className="text-[17px] font-bold tracking-tight">Agente de IA</h2>
         <div className="flex items-center gap-3">
-          {saved && <span className="text-xs text-primary">Guardado ✓</span>}
+          {saving && <span role="status">Guardando…</span>}
+          {dirty && <span className="text-xs">Cambios sin guardar</span>}
+          {saved && !dirty && <span role="status" className="text-xs text-primary">Guardado ✓</span>}
           <span className="text-sm text-muted-foreground">
             {profile.enabled ? "Encendido" : "Apagado"}
           </span>
@@ -164,7 +187,7 @@ export function AgentClient() {
               interruptor bloqueado dejaría al dueño sin forma de callarlo. */}
           <Switch
             checked={profile.enabled}
-            disabled={switchDisabled}
+            disabled={switchDisabled || saving}
             label="Agente encendido"
             onCheckedChange={(enabled) => void saveProfile({ enabled })}
           />
@@ -183,6 +206,8 @@ export function AgentClient() {
         )}
       </header>
 
+      {loadError && <p role="alert">{loadError} <Button onClick={() => void refetch()}>Reintentar</Button></p>}
+      {saveError && <p role="alert" className="px-6 pt-3 text-danger-text">{saveError}</p>}
       {brain && (
         <div className="mx-4 mt-4 sm:mx-6 sm:mt-6">
           <BrainStatusCard status={brain} />
@@ -216,8 +241,9 @@ export function AgentClient() {
           onTools={(tools) => void saveProfile({ tools })}
           onPreset={() => void cargarPreset()}
         />
-        <ProfileSection profile={profile} onSave={saveProfile} />
-        <KbSection entries={entries} kbSize={kbSize} onChanged={() => void refetch()} />
+        <ProfileSection key={presetRevision} profile={profile} onSave={saveProfile} onDirty={setProfileDirty} saving={saving} />
+        <KbSection entries={entries} kbSize={kbSize} onChanged={() => void refetch()} onDirty={setKbDirty} />
+        <KbDocuments onDirty={setDocumentDirty} />
       </div>
     </div>
   );
@@ -291,12 +317,21 @@ function RolSection({
 function ProfileSection({
   profile,
   onSave,
+  onDirty,
+  saving,
 }: {
   profile: Profile;
   onSave: (patch: Partial<Profile>) => Promise<boolean>;
+  onDirty: (dirty: boolean) => void;
+  saving: boolean;
 }) {
   const [form, setForm] = useState(profile);
-  useEffect(() => setForm(profile), [profile]);
+  const fields = (p: Profile) => { const {name,tone,instructions,escalationRules,greeting} = p; return {name,tone,instructions,escalationRules,greeting}; };
+  const [baseline, setBaseline] = useState(JSON.stringify(fields(profile)));
+  const dirty = JSON.stringify(fields(form)) !== baseline;
+  useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  useEffect(() => { if (!dirty) { setForm(profile); setBaseline(JSON.stringify(fields(profile))); } }, [profile, dirty]); // preserve edits across KB/role refreshes
+
 
   return (
     <Card>
@@ -354,15 +389,17 @@ function ProfileSection({
           />
         </div>
         <Button
-          onClick={() => {
+          disabled={saving || !dirty}
+          onClick={async () => {
             // 034 — Solo lo de esta tarjeta: el formulario guarda una copia
             // del perfil de cuando se abrió, y mandarla entera pisaría las
             // herramientas cambiadas después en la tarjeta del rol.
             const { name, tone, instructions, escalationRules, greeting } = form;
-            void onSave({ name, tone, instructions, escalationRules, greeting });
+            const patch = { name, tone, instructions, escalationRules, greeting };
+            if (await onSave(patch)) setBaseline(JSON.stringify(patch));
           }}
         >
-          Guardar comportamiento
+          {saving ? "Guardando…" : "Guardar comportamiento"}
         </Button>
       </CardContent>
     </Card>
@@ -373,41 +410,44 @@ function KbSection({
   entries,
   kbSize,
   onChanged,
+  onDirty,
 }: {
   entries: KbEntry[];
   kbSize: { chars: number; warnAt: number; warning: boolean } | null;
   onChanged: () => void;
+  onDirty: (dirty: boolean) => void;
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [block, setBlock] = useState("");
 
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => { onDirty(Boolean(question || answer || block)); }, [question, answer, block, onDirty]);
+
+  async function mutate(url: string, init: RequestInit) {
+    if (busy) return false;
+    setBusy(true); setError(null); setStatus(null);
+    try {
+      const response = await fetch(url, init);
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !(data?.entry?.id || data?.deleted === true)) throw new Error(data?.error?.message ?? "No se pudo guardar. Tu texto se conserva.");
+      onChanged(); setStatus(init.method === "DELETE" ? "Entrada eliminada." : "Conocimiento guardado.");
+      return true;
+    } catch(e) { setError(e instanceof Error ? e.message : "No se pudo conectar. Tu texto se conserva."); return false; }
+    finally { setBusy(false); }
+  }
   async function addQa() {
     if (!question.trim() || !answer.trim()) return;
-    await fetch("/api/kb", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "qa", question, answer }),
-    }).catch(() => null);
-    setQuestion("");
-    setAnswer("");
-    onChanged();
+    if (await mutate("/api/kb", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({kind:"qa",question,answer})})) {setQuestion("");setAnswer("");}
   }
-
   async function addBlock() {
     if (!block.trim()) return;
-    await fetch("/api/kb", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "block", content: block }),
-    }).catch(() => null);
-    setBlock("");
-    onChanged();
+    if (await mutate("/api/kb", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({kind:"block",content:block})})) setBlock("");
   }
-
   async function remove(id: string) {
-    await fetch(`/api/kb/${id}`, { method: "DELETE" }).catch(() => null);
-    onChanged();
+    await mutate(`/api/kb/${id}`, {method:"DELETE"});
   }
 
   return (
@@ -435,23 +475,28 @@ function KbSection({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {busy && <p role="status">Guardando conocimiento…</p>}
+        {error && <p role="alert" className="text-danger-text">{error}</p>}
+        {status && <p role="status">{status}</p>}
         <div className="space-y-2 rounded-md border p-3">
           <p className="text-sm font-medium">Nueva pregunta / respuesta</p>
           <Input
             placeholder="Pregunta (p. ej. ¿Hacen envíos?)"
+            disabled={busy}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
           <Textarea
             placeholder="Respuesta"
             rows={2}
+            disabled={busy}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
           />
           <Button
             size="sm"
             onClick={() => void addQa()}
-            disabled={!question.trim() || !answer.trim()}
+            disabled={busy || !question.trim() || !answer.trim()}
           >
             <Plus className="h-4 w-4" /> Agregar P/R
           </Button>
@@ -462,10 +507,11 @@ function KbSection({
           <Textarea
             placeholder="Horarios, direcciones, políticas…"
             rows={3}
+            disabled={busy}
             value={block}
             onChange={(e) => setBlock(e.target.value)}
           />
-          <Button size="sm" onClick={() => void addBlock()} disabled={!block.trim()}>
+          <Button size="sm" onClick={() => void addBlock()} disabled={busy || !block.trim()}>
             <Plus className="h-4 w-4" /> Agregar bloque
           </Button>
         </div>
@@ -487,6 +533,7 @@ function KbSection({
                 variant="ghost"
                 size="icon"
                 aria-label="Eliminar entrada"
+                disabled={busy}
                 onClick={() => void remove(e.id)}
               >
                 <Trash2 className="h-4 w-4" />

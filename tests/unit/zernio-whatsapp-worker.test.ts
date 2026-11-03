@@ -10,7 +10,7 @@ vi.mock("@/server/zernio/whatsapp-credenciales", () => ({ obtenerZernioWhatsAppP
 vi.mock("@/server/zernio/whatsapp-envio", () => ({ enviarTextoWhatsAppZernio: vi.fn() }));
 vi.mock("@/server/events/bus", () => ({ publish: vi.fn() }));
 const cambios: Record<string, unknown>[] = [];
-const job = { id: "d1", organizationId: "org1", conversationId: "cv1", messageId: "msg1", accountRef: "cuenta1",
+const job = { handoffReason: null, id: "d1", organizationId: "org1", conversationId: "cv1", messageId: "msg1", accountRef: "cuenta1",
   threadRef: "hilo1", requestKey: "clave-estable", status: "procesando" as const, attempts: 1,
   notBefore: new Date(), leasedUntil: new Date(), createdAt: new Date(), updatedAt: new Date() };
 beforeEach(() => {

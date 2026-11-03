@@ -54,6 +54,7 @@ function qa(question: string, answer: string): KbEntry {
     id: `kb_${question}`,
     organizationId: "org_1",
     kind: "qa",
+    documentId: null,
     question,
     answer,
     content: null,

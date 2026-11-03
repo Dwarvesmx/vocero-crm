@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { apiError, parseBody } from "@/lib/api";
@@ -55,16 +55,20 @@ export async function POST(req: Request) {
   if (!conv) return apiError(404, "not_found", "Conversación no encontrada");
 
   if (!conv.handoffAt) {
-    await db
+    const changed = await db
       .update(schema.conversation)
       .set({
         aiEnabled: false,
+        handoffPendingMessageId: null,
         handoffAt: new Date(),
         handoffReason: toHandoffReason(body.data.reason),
         updatedAt: new Date(),
       })
-      .where(eq(schema.conversation.id, conv.id));
-    publish(organizationId, {
+      // Un error concurrente de Nea no puede adelantarse al aviso pendiente.
+      // El UPDATE comparte el bloqueo de la transacción que registra ese aviso.
+      .where(and(eq(schema.conversation.id, conv.id), isNull(schema.conversation.handoffAt), isNull(schema.conversation.handoffPendingMessageId)))
+      .returning({id:schema.conversation.id});
+    if (changed.length) publish(organizationId, {
       type: "conversation.updated",
       data: { conversation: { id: conv.id } },
     });

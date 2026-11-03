@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, isNull, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { apiError } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
@@ -37,12 +37,14 @@ export async function GET(req: Request) {
   const kb = await db
     .select()
     .from(schema.kbEntry)
-    .where(eq(schema.kbEntry.organizationId, organizationId))
+    .where(and(eq(schema.kbEntry.organizationId, organizationId), isNull(schema.kbEntry.documentId)))
     .orderBy(asc(schema.kbEntry.createdAt));
 
   // 036 — Con qué piensa el cerebro que no trae llave: el proxy del CRM.
   const ia = await resolveAiProvider(organizationId);
   const llm: BotLlm = ia.ok && ia.provider.model ? { path: "/api/bot/llm", model: ia.provider.model } : null;
 
-  return Response.json(serializeBotProfile(profile, kb, llm));
+  const [doc] = await db.select({id:schema.kbDocument.id}).from(schema.kbDocument)
+    .where(and(eq(schema.kbDocument.organizationId,organizationId),eq(schema.kbDocument.status,"ready"),eq(schema.kbDocument.enabled,true))).limit(1);
+  return Response.json({...serializeBotProfile(profile, kb, llm), ...(doc ? {knowledge:{path:"/api/bot/knowledge"}} : {})});
 }

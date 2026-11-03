@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { and, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
@@ -12,7 +12,7 @@ export const GET = withAuth(async (session) => {
   const entries = await db
     .select()
     .from(schema.kbEntry)
-    .where(scoped(schema.kbEntry.organizationId, session.organizationId))
+    .where(and(scoped(schema.kbEntry.organizationId, session.organizationId), isNull(schema.kbEntry.documentId)))
     .orderBy(asc(schema.kbEntry.createdAt));
   return Response.json({ entries });
 });

@@ -1,3 +1,7 @@
 # Los scripts de shell corren dentro del contenedor (Linux): con CRLF, `sh` no
 # los ejecuta. Siempre LF, también en checkouts de Windows con autocrlf.
 *.sh text eol=lf
+
+# Preserve exact PDF/DOCX fixture bytes (PDF xref offsets must not change).
+tests/fixtures/kb-v1/*.pdf binary
+tests/fixtures/kb-v1/*.docx binary

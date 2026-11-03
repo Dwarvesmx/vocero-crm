@@ -36,5 +36,5 @@ export const POST = withAuth(async (session, req: Request) => {
     .where(scoped(schema.agentProfile.organizationId, session.organizationId))
     .returning();
   if (!updated[0]) return apiError(404, "not_found", "Perfil no encontrado");
-  return Response.json({ ok: true, role: rol.clave });
+  return Response.json({ ok: true, role: rol.clave, profile: updated[0] });
 });

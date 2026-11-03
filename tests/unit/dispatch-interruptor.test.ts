@@ -45,4 +45,11 @@ describe("interruptor del agente al despachar", () => {
     expect(construirEvento).toHaveBeenCalledWith(fila);
     expect(descartarDespacho).not.toHaveBeenCalledWith(fila, "el agente se apagó antes de despachar");
   });
+  it("no inicia otro turno durante un aviso de transferencia pendiente", async () => {
+    limit.mockResolvedValueOnce([{aiEnabled:true,handoffAt:null,handoffPendingMessageId:"msg_notice",isTest:false}]);
+    await tanda();
+    expect(descartarDespacho).toHaveBeenCalledWith(fila,"la IA se pausó antes de despachar");
+    expect(entregar).not.toHaveBeenCalled();
+  });
+
 });

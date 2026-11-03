@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { and, isNull, asc } from "drizzle-orm";
 import { withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -17,7 +17,7 @@ export const GET = withAuth(async (session) => {
   const entries = await db
     .select()
     .from(schema.kbEntry)
-    .where(scoped(schema.kbEntry.organizationId, session.organizationId))
+    .where(and(scoped(schema.kbEntry.organizationId, session.organizationId),isNull(schema.kbEntry.documentId)))
     .orderBy(asc(schema.kbEntry.createdAt));
   const chars = renderKb(entries).length;
   return Response.json({

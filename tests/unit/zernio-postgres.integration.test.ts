@@ -8,6 +8,7 @@ import { barrerEnviosWhatsAppZernio, detenerEnviosWhatsAppZernio, encolarEnvioWh
 import { listMessages, updateConversation } from "@/server/inbox/queries";
 import { procesarEntranteWhatsAppZernio } from "@/server/zernio/whatsapp-ingesta";
 import { POST } from "@/app/api/webhooks/zernio-whatsapp/route";
+import { POST as botHandoff } from "@/app/api/bot/handoff/route";
 import { POST as botMessages } from "@/app/api/bot/messages/route";
 import { tanda as tandaDespachos } from "@/server/dispatch/worker";
 import { tomarPendientes } from "@/server/dispatch/outbox";
@@ -438,4 +439,78 @@ describe.skipIf(!habilitado)("PostgreSQL real aislado — WhatsApp Zernio", () =
       process.env.ZERNIO_WHATSAPP_ENABLED = "false";
     }
   });
+  it("retiene la pausa hasta el ACK del aviso y no duplica ni reenvía resultados inciertos", async () => {
+    detenerEnviosWhatsAppZernio();
+    process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+    process.env.ZERNIO_NEA_AUTO_ENABLED = "true";
+    const [c] = await sql`select id from conversation where organization_id=${org} limit 1`;
+    const cv = String(c!.id);
+    const reset = async () => {
+      await sql`update conversation set ai_enabled=true, handoff_at=null, handoff_pending_message_id=null, last_inbound_at=now(), channel_thread_ref='hilo_ficticio' where id=${cv}`;
+      await sql`update agent_profile set enabled=true where organization_id=${org}`;
+    };
+    const input = { organizationId: org, conversationId: cv, accountRef: cuenta, threadRef: "hilo_ficticio", text: "Un asesor te atenderá", requestKey: "nea:handoff-prueba", aiGenerated: true, handoffReason: "cliente" };
+    try {
+      await reset();
+      const [a,b] = await Promise.all([encolarEnvioWhatsAppZernio(input), encolarEnvioWhatsAppZernio(input)]);
+      expect(a).toBe(b);
+      expect((await sql`select ai_enabled, handoff_pending_message_id from conversation where id=${cv}`)[0]).toMatchObject({ai_enabled:true,handoff_pending_message_id:a});
+      expect((await botHandoff(new Request("http://localhost/api/bot/handoff",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({conversationId:cv,reason:"error"})}))).status).toBe(200);
+      expect((await sql`select ai_enabled,handoff_at from conversation where id=${cv}`)[0]).toMatchObject({ai_enabled:true,handoff_at:null});
+      const [job] = await sql`select id from zernio_whatsapp_outbox where message_id=${a}`;
+      const mock = vi.fn(async () => {
+        expect((await sql`select ai_enabled from conversation where id=${cv}`)[0]!.ai_enabled).toBe(true);
+        return Response.json({success:true,data:{messageId:"wamid_handoff"}});
+      });
+      vi.stubGlobal("fetch",mock);
+      process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+      await Promise.all([liberarSalidaZernio(String(job!.id)),liberarSalidaZernio(String(job!.id))]);
+      expect(mock).toHaveBeenCalledTimes(1);
+      expect((await sql`select ai_enabled, handoff_reason, handoff_pending_message_id from conversation where id=${cv}`)[0]).toMatchObject({ai_enabled:false,handoff_reason:"cliente",handoff_pending_message_id:null});
+      expect((await sql`select status from message where id=${a}`)[0]!.status).toBe("sent");
+      process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+      await reset();
+      const uncertain = await encolarEnvioWhatsAppZernio({...input,requestKey:"nea:handoff-timeout"});
+      const [u] = await sql`select id from zernio_whatsapp_outbox where message_id=${uncertain}`;
+      mock.mockImplementation(async () => {throw new Error("timeout");});
+      process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+      await liberarSalidaZernio(String(u!.id));
+      await liberarSalidaZernio(String(u!.id));
+      expect(mock).toHaveBeenCalledTimes(2);
+      expect((await sql`select status from zernio_whatsapp_outbox where id=${u!.id}`)[0]!.status).toBe("incierto");
+      expect((await sql`select ai_enabled,handoff_pending_message_id from conversation where id=${cv}`)[0]).toMatchObject({ai_enabled:true,handoff_pending_message_id:uncertain});
+      await updateConversation(org,cv,{aiEnabled:false});
+      expect((await sql`select handoff_pending_message_id from conversation where id=${cv}`)[0]!.handoff_pending_message_id).toBeNull();
+      process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+      await reset();
+      const controlled = await encolarEnvioWhatsAppZernio({...input,requestKey:"nea:handoff-human"});
+      const [h] = await sql`select id from zernio_whatsapp_outbox where message_id=${controlled}`;
+      mock.mockImplementation(async () => {
+        await updateConversation(org,cv,{aiEnabled:false});
+        await updateConversation(org,cv,{reactivate:true});
+        return Response.json({success:true,data:{messageId:"wamid_reactivado"}});
+      });
+      process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+      await liberarSalidaZernio(String(h!.id));
+      // El ACK no revoca una decisión humana posterior al inicio externo.
+      expect((await sql`select ai_enabled,handoff_at,handoff_pending_message_id from conversation where id=${cv}`)[0]).toMatchObject({ai_enabled:true,handoff_at:null,handoff_pending_message_id:null});
+      process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+      await reset();
+      const revoked = await encolarEnvioWhatsAppZernio({...input,requestKey:"nea:handoff-revoked"});
+      const [r] = await sql`select id from zernio_whatsapp_outbox where message_id=${revoked}`;
+      await updateConversation(org,cv,{aiEnabled:false});
+      await updateConversation(org,cv,{reactivate:true});
+      const calls=mock.mock.calls.length;
+      process.env.ZERNIO_WHATSAPP_ENABLED = "true";
+      await liberarSalidaZernio(String(r!.id));
+      expect(mock).toHaveBeenCalledTimes(calls);
+      expect((await sql`select status from zernio_whatsapp_outbox where id=${r!.id}`)[0]!.status).toBe("cancelado");
+
+
+    } finally {
+      process.env.ZERNIO_WHATSAPP_ENABLED = "false";
+      process.env.ZERNIO_NEA_AUTO_ENABLED = "false";
+    }
+  });
+
 });

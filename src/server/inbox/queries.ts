@@ -202,8 +202,9 @@ export async function updateConversation(
 ) {
   const db = getDb();
   const set: Record<string, unknown> = { updatedAt: new Date() };
-  if (patch.aiEnabled !== undefined) set.aiEnabled = patch.aiEnabled;
+  if (patch.aiEnabled !== undefined) { set.aiEnabled = patch.aiEnabled; set.handoffPendingMessageId = null; }
   if (patch.reactivate) {
+    set.handoffPendingMessageId = null;
     set.handoffAt = null;
     set.handoffReason = null;
     set.aiEnabled = patch.aiEnabled ?? true;

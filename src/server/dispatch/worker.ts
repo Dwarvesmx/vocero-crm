@@ -170,6 +170,7 @@ async function procesar(fila: FilaDespacho): Promise<void> {
     .select({
       aiEnabled: schema.conversation.aiEnabled,
       handoffAt: schema.conversation.handoffAt,
+      handoffPendingMessageId: schema.conversation.handoffPendingMessageId,
       isTest: schema.conversation.isTest,
     })
     .from(schema.conversation)
@@ -188,7 +189,7 @@ async function procesar(fila: FilaDespacho): Promise<void> {
   // una (`despacharAlCerebro`), así que si hay un despacho suyo lo encoló el
   // Laboratorio. Su respuesta vuelve por `/api/bot/messages`, que la guarda
   // sin enviarla.
-  if (!conv.aiEnabled || conv.handoffAt) {
+  if (!conv.aiEnabled || conv.handoffAt || conv.handoffPendingMessageId) {
     await descartarDespacho(fila, "la IA se pausó antes de despachar");
     return;
   }

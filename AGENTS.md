@@ -192,3 +192,13 @@ Documentación: README («Tu agente al lado del CRM»), `docs/migrar-a-2.0.md`, 
 6. Dependencias: `pnpm install --frozen-lockfile` debe pasar; un tercero nuevo en el núcleo necesita justificación constitucional (Principio II).
 
 Las instrucciones específicas de Claude Code están en `CLAUDE.md`.
+
+## Metodología permanente ModoNext — documentación consultable
+
+- Antes de una tarea, leer el [índice maestro](https://github.com/Dwarvesmx/vocero-crm/blob/zernio-whatsapp/docs/modonext/README.md) y solo los documentos pertinentes; en el workspace del starter leer también el registro local aplicable.
+- Consultar primero commits, pruebas y decisiones existentes. No repetir auditorías ni suites aprobadas sin una causa concreta: cambio del contrato, fallo nuevo o entorno pendiente de validar.
+- Distinguir IMPLEMENTADO LOCALMENTE, PROBADO, código publicado e imágenes publicadas de DESPLEGADO/VERIFICADO EN PRODUCCIÓN; indicar entorno y evidencia.
+- Tras una tarea significativa, actualizar el índice o documento canónico existente con commits, pruebas, resultados y pendientes verificables. Evitar informes redundantes.
+- Publicar la documentación sanitizada junto con los cambios técnicos cuya publicación esté autorizada. Excluir secretos, teléfonos, conversaciones y trazas confidenciales; señalar la ubicación local del original no publicado.
+- No afirmar despliegue sin verificación de producción. No modificar producción sin autorización expresa, aunque el código o las imágenes ya estén publicados.
+- Mantener los estados e incidencias cerradas del índice; no reabrirlos sin evidencia nueva. Cambios de documentación no autorizan activación, migraciones ni despliegue.

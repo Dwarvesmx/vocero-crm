@@ -1,4 +1,4 @@
-name: Publicar Zernio validado - origen público
+name: Publicar V1 validado Linux
 on:
   push:
     branches: [zernio-whatsapp]
@@ -74,6 +74,19 @@ jobs:
           PY
           echo "$REF" | tee image-reference.txt
           printf '### Imagen verificada\n\n%s\n\nFuente: %s\n\nPlataforma: linux/amd64\n' "$REF" "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Validar PDF y dependencia nativa en imagen final Linux
+        shell: bash
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/amd64 --network none --read-only --tmpfs /tmp \
+            --user 1000:1000 --cap-drop ALL --security-opt no-new-privileges \
+            --mount "type=bind,src=$PWD/tests/fixtures/kb-v1,dst=/fixtures,readonly" \
+            --mount "type=bind,src=$PWD/scripts/check-kb-linux.mjs,dst=/check-kb-linux.mjs,readonly" \
+            --entrypoint node "$IMAGE@$DIGEST" /check-kb-linux.mjs | tee pdf-linux.json
+          docker run --rm --platform linux/amd64 --network none --read-only \
+            --entrypoint sh "$IMAGE@$DIGEST" -c 'sha256sum /app/drizzle/0031_*.sql /app/drizzle/0032_*.sql /app/drizzle/0033_*.sql' > migrations-sha256.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: evidencia-vocero-crm-${{ github.sha }}
@@ -81,5 +94,7 @@ jobs:
             manifest.txt
             image-inspect.json
             image-reference.txt
+            pdf-linux.json
+            migrations-sha256.txt
           retention-days: 30
 

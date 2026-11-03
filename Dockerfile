@@ -23,6 +23,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG SOURCE_COMMIT=""
 ENV SOURCE_COMMIT=$SOURCE_COMMIT
 RUN pnpm build
+# Prueba de empaquetado: mismo extractor de producción, sin framework ni BD.
+RUN pnpm exec esbuild src/server/kb/extract.ts --bundle --packages=external \
+    --platform=node --format=esm --outfile=kb-extract.mjs
 # migrate.mjs autocontenido (drizzle-orm + postgres bundleados)
 RUN pnpm exec esbuild scripts/migrate.mjs --bundle --platform=node \
     --format=esm --outfile=migrate.bundle.mjs \
@@ -51,6 +54,7 @@ RUN mkdir -p /data/media && chown -R vocero:vocero /data
 COPY --from=builder --chown=vocero:vocero /app/.next/standalone ./
 COPY --from=builder --chown=vocero:vocero /app/.next/static ./.next/static
 COPY --from=builder --chown=vocero:vocero /app/public ./public
+COPY --from=builder --chown=vocero:vocero /app/kb-extract.mjs ./kb-extract.mjs
 COPY --from=builder --chown=vocero:vocero /app/migrate.bundle.mjs ./migrate.mjs
 COPY --from=builder --chown=vocero:vocero /app/seed-demo.bundle.mjs ./seed-demo.mjs
 COPY --from=builder --chown=vocero:vocero /app/drizzle ./drizzle

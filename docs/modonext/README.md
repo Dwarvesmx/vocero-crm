@@ -11,13 +11,19 @@ Registro técnico público sanitizado. Última actualización: 2026-11-03. Este 
 
 El HEAD documental exacto es el commit que GitHub muestra en este archivo; consultar también los historiales de [Vocero](https://github.com/Dwarvesmx/vocero-crm/commits/zernio-whatsapp/) y [Nea](https://github.com/Dwarvesmx/nea-agent/commits/zernio-identidad-respuesta/). Los commits de construcción y digests verificados se registran a continuación; una actualización documental posterior no cambia la fuente de una imagen ya publicada.
 
-## Producción: última versión registrada, distinta de DEV
+## Producción: V1 desplegada y verificada
 
-Última evidencia técnica registrada el 2026-11-02 (no es una consulta nueva):
+El 2026-11-03 se actualizaron las aplicaciones existentes en orden CRM → Nea. HTTPS y PostgreSQL respondieron correctamente; los commits ejecutados se verificaron y ambos contratos internos respondieron sin enviar mensajes durante el despliegue.
 
-- CRM 2.7.0, commit `3628b41d95a851d3b83bb0d33a694f430ae658ce`, `ghcr.io/dwarvesmx/vocero-crm@sha256:7c595c9c5e412070c747436be985b61f4d35fa6386a0027d0904c402ad73bf8e`.
-- Nea 2.0.2, commit `aefc25c4e2c2478c44443ae7edd3dc850474353e`, `ghcr.io/dwarvesmx/nea-agent@sha256:f886751c3da875c1d5324b2c553cbd88be26574ee7eb37f21d1210bcd314549d`.
-- El propietario confirmó después recepción, envío manual, Coexistence y respuesta real de Lukas. Las mejoras V1 NO están desplegadas por esta publicación. No se alteró el estado de producción.
+- CRM 2.7.0: commit `a65917720b6616479ce5d7fd5c9355566aea5506`, `ghcr.io/dwarvesmx/vocero-crm@sha256:b520d2625aa39218824b26dc85c992972d1e8e092f5a1424e44eaef310c6e6b2`.
+- Nea 2.0.2: commit `489aecd76da177eeace334d79bf78a77a11b91b6`, `ghcr.io/dwarvesmx/nea-agent@sha256:ffa90851bdedc7cf0ee0e398b32704a1a6baf9b32b42c5ef0a58f951a583a0ff`.
+- CRM 0031–0033 registradas una vez con hashes correctos; estructura de Nea 010 comprobada. Datos, variables, configuración y almacenamiento conservados según las comprobaciones técnicas; no se necesitó reversión.
+- Respaldos puntuales anteriores: CRM 128448 bytes, Nea 25368 bytes; Coolify reportó éxito local y subida a R2. Restauración aislada no ensayada. El volumen conservó su respaldo puntual verificado.
+- Lukas quedó apagado al cierre técnico del despliegue; las pruebas posteriores fueron reportadas por el propietario. El estado actual del interruptor no se ha vuelto a consultar. `coolify_operations=false` confirmado el 2026-11-04 en la configuración local.
+
+## Validaciones posteriores reportadas por el propietario
+
+El propietario informó que el guardado del comportamiento persiste; un PDF de conocimiento quedó listo y habilitado, con vista previa legible; Lukas respondió coherentemente una pregunta comercial; y el aviso de transferencia apareció antes de la pausa sin nuevo error de autorización. Son observaciones del propietario, no pruebas ejecutadas por Codex. La recuperación documental inequívoca sigue pendiente.
 
 ## Funcionalidades terminadas y evidencia
 
@@ -38,7 +44,7 @@ El HEAD documental exacto es el commit que GitHub muestra en este archivo; consu
 
 ## Migraciones y despliegue coordinado
 
-Aplicación futura, NO ejecutada en producción:
+Aplicación completada en producción el 2026-11-03; orden y condiciones conservados como referencia:
 
 1. Con automatización pausada y respaldos/reversión acordados, actualizar CRM: [0031](../../drizzle/0031_cold_smiling_tiger.sql), [0032](../../drizzle/0032_even_wind_dancer.sql), [0033](../../drizzle/0033_giant_inertia.sql), tras su historial existente.
 2. Actualizar Nea y aplicar [010_pending_handoff.sql](https://github.com/Dwarvesmx/nea-agent/blob/zernio-identidad-respuesta/migrations/010_pending_handoff.sql), tras 009.
@@ -47,7 +53,7 @@ Aplicación futura, NO ejecutada en producción:
 
 Los contenedores conservan migraciones al arranque; no arrancar sus comandos por defecto contra producción antes de autorizar esa operación. La validación Linux usa entrypoint de prueba, sin red, credenciales ni PostgreSQL. Reversión y particularidad de los fragmentos KB en imágenes antiguas: ver el informe V1; no revertir ciegamente ni borrar originales.
 
-## Publicación Linux V1 — PROBADO, sin despliegue
+## Publicación Linux V1 — evidencia previa al despliegue
 
 Ambos workflows terminaron **success**, plataforma **linux/amd64**. Se publicaron las ramas existentes sin merges ni force push. Los commits funcionales `e2c8086` y `32f7d00` se conservaron como ancestros; los únicos ajustes posteriores son documentación, publicación y corrección del empaquetado PDF.
 
@@ -75,8 +81,8 @@ El HEAD documental puede avanzar después del commit de imagen: consultar el com
 
 ## Pendientes comprobados y decisiones
 
-1. Prioridad siguiente: autorización expresa para desplegar la pareja verificada, con automatización pausada y migraciones en el orden documentado. Linux/PDF y los dos digests ya quedaron PROBADOS.
-2. Prueba real supervisada posterior al despliegue: sigue pendiente de autorización. No se enviaron mensajes ni se tocó producción en esta publicación.
+1. Pendiente: demostrar inequívocamente la recuperación de información del PDF en una prueba supervisada autorizada.
+2. Pendiente: ensayar la restauración aislada de los respaldos en un entorno autorizado.
 3. Mypy global Nea: seis errores en tres archivos ajenos a V1, detallados en el informe; mypy focalizado de los ocho módulos modificados aprobado. No ampliar publicación para corregirlos.
 4. Restauración productiva aislada no ensayada según la bitácora; no se presenta un respaldo exitoso como restauración comprobada.
 5. Límites V1: PDF requiere texto, sin OCR; consulta léxica en español, contexto acotado, anuncio documental sujeto al TTL del perfil; ver límites y recuperación en el informe.

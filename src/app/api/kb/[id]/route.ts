@@ -28,7 +28,7 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
         schema.kbEntry.organizationId,
         session.organizationId,
         eq(schema.kbEntry.id, id),
-        isNull(schema.kbEntry.documentId)
+        isNull(schema.kbEntry.demoSpaceId), isNull(schema.kbEntry.documentId)
       )
     )
     .returning();
@@ -46,7 +46,7 @@ export const DELETE = withAuth(async (session, _req: Request, ctx: Params) => {
         schema.kbEntry.organizationId,
         session.organizationId,
         eq(schema.kbEntry.id, id),
-        isNull(schema.kbEntry.documentId)
+        isNull(schema.kbEntry.demoSpaceId), isNull(schema.kbEntry.documentId)
       )
     )
     .returning();

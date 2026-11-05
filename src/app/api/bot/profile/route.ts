@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   const kb = await db
     .select()
     .from(schema.kbEntry)
-    .where(and(eq(schema.kbEntry.organizationId, organizationId), isNull(schema.kbEntry.documentId)))
+    .where(and(and(eq(schema.kbEntry.organizationId, organizationId), isNull(schema.kbEntry.demoSpaceId)), isNull(schema.kbEntry.documentId)))
     .orderBy(asc(schema.kbEntry.createdAt));
 
   // 036 — Con qué piensa el cerebro que no trae llave: el proxy del CRM.
@@ -45,6 +45,6 @@ export async function GET(req: Request) {
   const llm: BotLlm = ia.ok && ia.provider.model ? { path: "/api/bot/llm", model: ia.provider.model } : null;
 
   const [doc] = await db.select({id:schema.kbDocument.id}).from(schema.kbDocument)
-    .where(and(eq(schema.kbDocument.organizationId,organizationId),eq(schema.kbDocument.status,"ready"),eq(schema.kbDocument.enabled,true))).limit(1);
+    .where(and(and(eq(schema.kbDocument.organizationId,organizationId), isNull(schema.kbDocument.demoSpaceId)),eq(schema.kbDocument.status,"ready"),eq(schema.kbDocument.enabled,true))).limit(1);
   return Response.json({...serializeBotProfile(profile, kb, llm), ...(doc ? {knowledge:{path:"/api/bot/knowledge"}} : {})});
 }

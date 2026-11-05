@@ -1,4 +1,8 @@
 import {
+  bigint,
+  type PgTableExtraConfigValue,
+  foreignKey,
+  unique,
   boolean,
   check,
   index,
@@ -399,6 +403,7 @@ export const conversation = pgTable(
     uniqueIndex("conversation_org_contact_real_uq")
       .on(t.organizationId, t.contactId)
       .where(sql`${t.isTest} = false`),
+    unique("conversation_org_id_uq").on(t.organizationId,t.id),
     index("conversation_org_last_idx").on(t.organizationId, t.lastMessageAt),
   ]
 );
@@ -410,6 +415,9 @@ export const message = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    scopeKind: text("scope_kind").notNull().default("commercial"),
+    demoSessionId: text("demo_session_id"),
+    routeGeneration: integer("route_generation"),
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversation.id, { onDelete: "cascade" }),
@@ -448,6 +456,10 @@ export const message = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
+    foreignKey({ name: "message_demo_session_fk", columns: [t.organizationId,t.conversationId,t.demoSessionId],
+      foreignColumns: [demoSession.organizationId,demoSession.conversationId,demoSession.id] }).onDelete("restrict"),
+    check("message_demo_scope_ck", sql`(${t.scopeKind} = 'demo' and ${t.demoSessionId} is not null and ${t.routeGeneration} > 0)
+      or (${t.scopeKind} in ('commercial','blocked') and ${t.demoSessionId} is null)`),
     index("message_org_conv_idx").on(
       t.organizationId,
       t.conversationId,
@@ -755,6 +767,7 @@ export const agentProfile = pgTable(
 export const kbDocument = pgTable("kb_document", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organization.id, {onDelete:"cascade"}),
+  demoSpaceId: text("demo_space_id"),
   name: text("name").notNull(),
   mime: text("mime").notNull(),
   sha256: text("sha256").notNull(),
@@ -765,7 +778,12 @@ export const kbDocument = pgTable("kb_document", {
   leasedUntil: timestamp("leased_until"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, t => [uniqueIndex("kb_document_org_sha_uq").on(t.organizationId,t.sha256)]);
+}, t => [
+  uniqueIndex("kb_document_org_sha_uq").on(t.organizationId,t.sha256).where(sql`${t.demoSpaceId} is null`),
+  uniqueIndex("kb_document_demo_sha_uq").on(t.organizationId,t.demoSpaceId,t.sha256).where(sql`${t.demoSpaceId} is not null`),
+  index("kb_document_demo_scope_idx").on(t.organizationId,t.demoSpaceId,t.status,t.enabled),
+  foreignKey({ columns: [t.organizationId,t.demoSpaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+]);
 
 export const kbEntry = pgTable(
   "kb_entry",
@@ -774,6 +792,7 @@ export const kbEntry = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    demoSpaceId: text("demo_space_id"),
     kind: text("kind", { enum: ["qa", "block"] }).notNull(),
     documentId: text("document_id").references(() => kbDocument.id, {onDelete:"cascade"}),
     question: text("question"),
@@ -783,6 +802,8 @@ export const kbEntry = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
+    foreignKey({ columns: [t.organizationId,t.demoSpaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+    index("kb_demo_scope_idx").on(t.organizationId,t.demoSpaceId,t.documentId),
     index("kb_org_idx").on(t.organizationId),
     index("kb_document_chunks_idx").on(t.documentId),
     index("kb_content_search_idx").using("gin", sql`to_tsvector('spanish', coalesce(${t.content}, ''))`),
@@ -1283,6 +1304,13 @@ export const dispatch = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    contractVersion: integer("contract_version"),
+    profileVersionId: text("profile_version_id"),
+    snapshot: jsonb("snapshot"),
+    payloadHash: text("payload_hash"),
+    scopeKind: text("scope_kind").notNull().default("commercial"),
+    demoSessionId: text("demo_session_id"),
+    routeGeneration: integer("route_generation"),
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversation.id, { onDelete: "cascade" }),
@@ -1325,6 +1353,10 @@ export const dispatch = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
+    foreignKey({ name: "dispatch_demo_session_fk", columns: [t.organizationId,t.conversationId,t.demoSessionId],
+      foreignColumns: [demoSession.organizationId,demoSession.conversationId,demoSession.id] }).onDelete("restrict"),
+    check("dispatch_demo_scope_ck", sql`(${t.scopeKind} = 'demo' and ${t.demoSessionId} is not null and ${t.routeGeneration} > 0)
+      or (${t.scopeKind} in ('commercial') and ${t.demoSessionId} is null)`),
     /**
      * La pieza central de esta tabla: como máximo UN despacho vivo por
      * conversación. De aquí salen el agrupado de ráfagas y el orden, y
@@ -1466,3 +1498,218 @@ export const conversationNote = pgTable(
     index("conversation_note_conv_idx").on(t.organizationId, t.conversationId, t.createdAt),
   ]
 );
+
+
+// Demo Center: fundamentos administrativos. Las tablas de ejecución no tienen workers en Fase 1.
+const demoOrg = () => text("organization_id").notNull().references(() => organization.id);
+const demoTime = (name: string) => timestamp(name, { withTimezone: true });
+const demoId = () => text("id").primaryKey();
+const demoSpaceId = () => text("space_id").notNull();
+const demoAmount = (name: string) => bigint(name, { mode: "bigint" });
+
+export const demoSpace = pgTable("demo_space", {
+  id: demoId(), organizationId: demoOrg(), name: text("name").notNull(),
+  commercialName: text("commercial_name").notNull(), sector: text("sector").notNull(),
+  description: text("description").notNull().default(""),
+  visualIdentity: jsonb("visual_identity").notNull().default({}),
+  status: text("status", { enum: ["draft", "active", "disabled"] }).notNull().default("draft"),
+  generation: integer("generation").notNull().default(1),
+  currentProfileVersionId: text("current_profile_version_id"),
+  createdAt: demoTime("created_at").notNull().defaultNow(),
+  updatedAt: demoTime("updated_at").notNull().defaultNow(),
+}, (t): PgTableExtraConfigValue[] => [
+  unique().on(t.organizationId, t.id), unique().on(t.organizationId, t.name),
+  check("demo_space_status_ck", sql`${t.status} in ('draft','active','disabled') and ${t.generation} > 0`),
+  foreignKey({ columns: [t.organizationId,t.id,t.currentProfileVersionId], foreignColumns: [
+    demoProfileVersion.organizationId,demoProfileVersion.spaceId,demoProfileVersion.id
+  ] }).onDelete("restrict"),
+]);
+
+export const demoProfileVersion = pgTable("demo_profile_version", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
+  version: integer("version").notNull(), name: text("name").notNull(),
+  tone: text("tone").notNull(), instructions: text("instructions").notNull(),
+  escalationRules: text("escalation_rules").notNull(), greeting: text("greeting").notNull(),
+  role: text("role").notNull(), tools: jsonb("tools").$type<string[]>().notNull().default([]),
+  createdBy: text("created_by").notNull().references(() => user.id),
+  createdAt: demoTime("created_at").notNull().defaultNow(),
+}, t => [
+  unique().on(t.organizationId,t.spaceId,t.id), unique().on(t.spaceId,t.version),
+  foreignKey({ columns: [t.organizationId,t.spaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+  check("demo_profile_version_ck",sql`${t.version} > 0`),
+]);
+
+export const demoAuthorization = pgTable("demo_authorization", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
+  channel: text("channel").notNull().default("whatsapp"), canonicalPhone: jsonb("canonical_phone").notNull(),
+  phoneLookup: text("phone_lookup").notNull(), phoneSuffix: text("phone_suffix").notNull(),
+  state: text("state", { enum: ["active","revoked"] }).notNull().default("active"),
+  version: integer("version").notNull().default(1), expiresAt: demoTime("expires_at"),
+  createdBy: text("created_by").notNull().references(() => user.id),
+  createdAt: demoTime("created_at").notNull().defaultNow(),
+}, t => [
+  unique().on(t.organizationId,t.spaceId,t.id),
+  foreignKey({ columns: [t.organizationId,t.spaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+  uniqueIndex("demo_authorization_active_uq").on(t.organizationId,t.spaceId,t.channel,t.phoneLookup).where(sql`${t.state} = 'active'`),
+  check("demo_authorization_state_ck",sql`${t.state} in ('active','revoked') and ${t.version} > 0`),
+]);
+
+export const demoLimits = pgTable("demo_limits", {
+  id: demoId(), organizationId: demoOrg(), spaceId: text("space_id"),
+  version: integer("version").notNull().default(1), enabled: boolean("enabled").notNull().default(true),
+  maxDurationSeconds: integer("max_duration_seconds").notNull(),
+  maxIdleSeconds: integer("max_idle_seconds").notNull(),
+  maxConcurrentSessions: integer("max_concurrent_sessions").notNull(),
+  maxSessionsStarted: integer("max_sessions_started").notNull(),
+  maxInboundMessages: integer("max_inbound_messages").notNull(),
+  maxAssistantResponses: integer("max_assistant_responses").notNull(),
+  maxProviderCalls: integer("max_provider_calls").notNull(),
+  budgetMicroUsd: demoAmount("budget_micro_usd").notNull(),
+  sessionBudgetMicroUsd: demoAmount("session_budget_micro_usd"),
+  windowStart: demoTime("window_start").notNull(), windowEnd: demoTime("window_end").notNull(),
+}, t => [
+  foreignKey({ columns: [t.organizationId,t.spaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+  uniqueIndex("demo_limits_org_uq").on(t.organizationId).where(sql`${t.spaceId} is null`),
+  uniqueIndex("demo_limits_space_uq").on(t.organizationId,t.spaceId).where(sql`${t.spaceId} is not null`),
+  check("demo_limits_values_ck",sql`${t.version} > 0 and ${t.windowEnd} > ${t.windowStart}
+    and least(${t.maxDurationSeconds}, ${t.maxIdleSeconds}, ${t.maxConcurrentSessions},
+      ${t.maxSessionsStarted}, ${t.maxInboundMessages}, ${t.maxAssistantResponses},
+      ${t.maxProviderCalls}, ${t.budgetMicroUsd}, ${t.sessionBudgetMicroUsd}) >= 0`),
+]);
+
+export const demoAdminAudit = pgTable("demo_admin_audit", {
+  id: demoId(), organizationId: demoOrg(), spaceId: text("space_id"),
+  actorUserId: text("actor_user_id").notNull().references(() => user.id),
+  action: text("action").notNull(), targetId: text("target_id").notNull(),
+  priorVersion: integer("prior_version"), newVersion: integer("new_version"),
+  reasonCode: text("reason_code").notNull(), requestId: text("request_id").notNull(),
+  result: text("result").notNull(), timestamp: demoTime("timestamp").notNull().defaultNow(),
+}, t => [
+  index("demo_admin_audit_scope_idx").on(t.organizationId,t.spaceId,t.timestamp),
+  foreignKey({ columns: [t.organizationId,t.spaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+]);
+
+export const demoSession = pgTable("demo_session", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
+  authorizationId: text("authorization_id").notNull(), conversationId: text("conversation_id").notNull(),
+  profileVersionId: text("profile_version_id").notNull(), routeGeneration: integer("route_generation").notNull(),
+  state: text("state").notNull(), startedAt: demoTime("started_at").notNull(),
+  expiresAt: demoTime("expires_at").notNull(), lastActivityAt: demoTime("last_activity_at").notNull(),
+  idleDeadline: demoTime("idle_deadline").notNull(), endedAt: demoTime("ended_at"),
+  limitsSnapshot: jsonb("limits_snapshot").notNull(),
+}, t => [
+  unique().on(t.organizationId,t.spaceId,t.id), unique().on(t.organizationId,t.conversationId,t.id),
+  unique().on(t.organizationId,t.id),
+  foreignKey({ name: "demo_session_authorization_fk", columns: [t.organizationId,t.spaceId,t.authorizationId],
+    foreignColumns: [demoAuthorization.organizationId,demoAuthorization.spaceId,demoAuthorization.id] }).onDelete("restrict"),
+  foreignKey({ name: "demo_session_profile_fk", columns: [t.organizationId,t.spaceId,t.profileVersionId],
+    foreignColumns: [demoProfileVersion.organizationId,demoProfileVersion.spaceId,demoProfileVersion.id] }).onDelete("restrict"),
+  foreignKey({ name: "demo_session_conversation_fk", columns: [t.organizationId,t.conversationId],
+    foreignColumns: [conversation.organizationId,conversation.id] }).onDelete("restrict"),
+  index("demo_session_expiry_idx").on(t.organizationId,t.spaceId,t.state,t.expiresAt),
+  check("demo_session_state_ck", sql`${t.state} in ('active','expired','revoked','superseded','closed')
+    and ${t.routeGeneration} > 0 and ${t.expiresAt} > ${t.startedAt}`),
+]);
+
+export const demoIdentityRoute = pgTable("demo_identity_route", {
+  id: demoId(), organizationId: demoOrg(), channel: text("channel").notNull(),
+  identityLookup: text("identity_lookup").notNull(), mode: text("mode").notNull(),
+  sessionId: text("session_id"), generation: integer("generation").notNull().default(1),
+  lastEventSequence: demoAmount("last_event_sequence").notNull().default(sql`0`),
+  blockedSince: demoTime("blocked_since"), blockedReason: text("blocked_reason"),
+  reviewDueAt: demoTime("review_due_at"), lastReviewNotifiedAt: demoTime("last_review_notified_at"),
+}, t => [
+  unique().on(t.organizationId,t.channel,t.identityLookup),
+  foreignKey({ name: "demo_route_session_fk", columns: [t.organizationId,t.sessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.id] }).onDelete("restrict"),
+  check("demo_route_mode_ck", sql`${t.generation} > 0 and ((${t.mode} = 'demo' and ${t.sessionId} is not null)
+    or (${t.mode} in ('commercial','blocked') and ${t.sessionId} is null))`),
+]);
+
+export const demoIdentityBinding = pgTable("demo_identity_binding", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(), channel: text("channel").notNull(),
+  accountRef: text("account_ref").notNull(), identityKind: text("identity_kind").notNull(),
+  identityLookup: text("identity_lookup").notNull(), authorizationId: text("authorization_id").notNull(),
+  state: text("state").notNull(), evidenceType: text("evidence_type").notNull(), evidenceRef: text("evidence_ref").notNull(),
+  verifiedBy: text("verified_by").notNull().references(() => user.id), verifiedAt: demoTime("verified_at").notNull(),
+  expiresAt: demoTime("expires_at"), version: integer("version").notNull().default(1),
+}, t => [
+  foreignKey({ name: "demo_binding_authorization_fk", columns: [t.organizationId,t.spaceId,t.authorizationId],
+    foreignColumns: [demoAuthorization.organizationId,demoAuthorization.spaceId,demoAuthorization.id] }).onDelete("restrict"),
+  uniqueIndex("demo_binding_verified_uq").on(t.organizationId,t.channel,t.accountRef,t.identityKind,t.identityLookup)
+    .where(sql`${t.state} = 'verified'`),
+  check("demo_binding_state_ck", sql`${t.state} in ('verified','revoked') and ${t.identityKind} in ('phone','bsuid') and ${t.version} > 0`),
+]);
+
+export const demoSessionEvent = pgTable("demo_session_event", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(), sessionId: text("session_id").notNull(),
+  type: text("type").notNull(), occurredAt: demoTime("occurred_at").notNull().defaultNow(),
+  actor: text("actor").notNull(), reasonCode: text("reason_code").notNull(), metadata: jsonb("metadata"),
+}, t => [
+  foreignKey({ name: "demo_event_session_fk", columns: [t.organizationId,t.spaceId,t.sessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.spaceId,demoSession.id] }).onDelete("restrict"),
+  index("demo_session_event_scope_idx").on(t.organizationId,t.spaceId,t.sessionId,t.occurredAt),
+]);
+
+export const demoUsageBucket = pgTable("demo_usage_bucket", {
+  id: demoId(), organizationId: demoOrg(), scopeKind: text("scope_kind").notNull(), scopeId: text("scope_id").notNull(),
+  windowStart: demoTime("window_start").notNull(), windowEnd: demoTime("window_end").notNull(),
+  sessionsStarted: integer("sessions_started").notNull().default(0), inboundMessages: integer("inbound_messages").notNull().default(0),
+  assistantResponses: integer("assistant_responses").notNull().default(0), providerCalls: integer("provider_calls").notNull().default(0),
+  reservedMicroUsd: demoAmount("reserved_micro_usd").notNull().default(sql`0`), settledMicroUsd: demoAmount("settled_micro_usd").notNull().default(sql`0`),
+}, t => [
+  unique().on(t.organizationId,t.scopeKind,t.scopeId,t.windowStart),
+  check("demo_usage_bucket_ck", sql`${t.scopeKind} in ('global','space','session') and ${t.windowEnd} > ${t.windowStart}
+    and least(${t.sessionsStarted},${t.inboundMessages},${t.assistantResponses},${t.providerCalls},${t.reservedMicroUsd},${t.settledMicroUsd}) >= 0`),
+]);
+
+export const demoUsageOperation = pgTable("demo_usage_operation", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(), sessionId: text("session_id").notNull(),
+  operationKey: text("operation_key").notNull(), kind: text("kind").notNull(), status: text("status").notNull(),
+  reservedAmount: demoAmount("reserved_amount").notNull().default(sql`0`), actualAmount: demoAmount("actual_amount"),
+  providerRequestId: text("provider_request_id"), createdAt: demoTime("created_at").notNull().defaultNow(),
+}, t => [
+  unique().on(t.organizationId,t.operationKey),
+  foreignKey({ name: "demo_operation_session_fk", columns: [t.organizationId,t.spaceId,t.sessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.spaceId,demoSession.id] }).onDelete("restrict"),
+  check("demo_operation_ck", sql`${t.kind} in ('session_start','inbound','response','provider_call')
+    and ${t.status} in ('reserved','settled','released','uncertain')
+    and least(${t.reservedAmount},${t.actualAmount}) >= 0`),
+]);
+
+export const demoConcurrencyBucket = pgTable("demo_concurrency_bucket", {
+  id: demoId(), organizationId: demoOrg(), spaceId: text("space_id"),
+  activeSessions: integer("active_sessions").notNull().default(0),
+}, t => [
+  uniqueIndex("demo_concurrency_org_uq").on(t.organizationId).where(sql`${t.spaceId} is null`),
+  uniqueIndex("demo_concurrency_space_uq").on(t.organizationId,t.spaceId).where(sql`${t.spaceId} is not null`),
+  foreignKey({ name: "demo_concurrency_space_fk", columns: [t.organizationId,t.spaceId],
+    foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+  check("demo_concurrency_active_ck", sql`${t.activeSessions} >= 0`),
+]);
+
+export const demoDispatchDebt = pgTable("demo_dispatch_debt", {
+  id: demoId(), organizationId: demoOrg(), conversationId: text("conversation_id").notNull(),
+  messageId: text("message_id").notNull().unique().references(() => message.id),
+  scopeKind: text("scope_kind").notNull(), sessionId: text("session_id"), generation: integer("generation"),
+  receivedAt: demoTime("received_at").notNull().defaultNow(), handledAt: demoTime("handled_at"),
+}, t => [
+  foreignKey({ name: "demo_debt_conversation_fk", columns: [t.organizationId,t.conversationId],
+    foreignColumns: [conversation.organizationId,conversation.id] }).onDelete("restrict"),
+  foreignKey({ name: "demo_debt_session_fk", columns: [t.organizationId,t.conversationId,t.sessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.conversationId,demoSession.id] }).onDelete("restrict"),
+  index("demo_debt_pending_idx").on(t.organizationId,t.conversationId,t.receivedAt).where(sql`${t.handledAt} is null`),
+]);
+
+export const demoLimitException = pgTable("demo_limit_exception", {
+  id: demoId(), organizationId: demoOrg(), spaceId: text("space_id"),
+  extraBudgetMicroUsd: demoAmount("extra_budget_micro_usd").notNull(),
+  reason: text("reason").notNull(), expiresAt: demoTime("expires_at").notNull(),
+  createdAt: demoTime("created_at").notNull().defaultNow(),
+  createdBy: text("created_by").notNull().references(() => user.id),
+}, t => [
+  foreignKey({ name: "demo_exception_space_fk", columns: [t.organizationId,t.spaceId],
+    foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+  index("demo_exception_scope_idx").on(t.organizationId,t.spaceId,t.expiresAt),
+  check("demo_exception_values_ck", sql`${t.extraBudgetMicroUsd} > 0 and ${t.expiresAt} > ${t.createdAt}`),
+]);

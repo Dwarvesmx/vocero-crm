@@ -1,3 +1,4 @@
+import { isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { estadoIaDe, mensajeDeEstado } from "@/lib/ai/provider";
@@ -67,7 +68,7 @@ export async function onboardingStatus(
   const [kb] = await db
     .select({ id: schema.kbEntry.id })
     .from(schema.kbEntry)
-    .where(scoped(schema.kbEntry.organizationId, organizationId))
+    .where(scoped(schema.kbEntry.organizationId, organizationId, isNull(schema.kbEntry.demoSpaceId)))
     .limit(1);
   const [channel] = await db
     .select({ status: schema.metaCredentials.status })

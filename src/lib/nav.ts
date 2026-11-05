@@ -69,6 +69,7 @@ export function appNavGroups({
   // Un miembro del equipo no puede hacer ninguno de los pasos de la guía.
   if (canConfigure(role)) {
     agente.push({ href: "/onboarding", label: "Guía de inicio", icon: ListChecks });
+    agente.push({ href: "/demo-center", label: "Demo Center", icon: FlaskConical });
   }
   agente.push(
     { href: "/agent", label: "Agente", icon: Sparkles },

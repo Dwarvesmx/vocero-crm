@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, isNull } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 import { schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
@@ -163,7 +163,7 @@ export async function seedDemo(
   // KB y corridas demo previas
   await db
     .delete(schema.kbEntry)
-    .where(eq(schema.kbEntry.organizationId, organizationId));
+    .where(and(eq(schema.kbEntry.organizationId, organizationId), isNull(schema.kbEntry.demoSpaceId)));
   await db
     .delete(schema.agentTestCase)
     .where(eq(schema.agentTestCase.organizationId, organizationId));

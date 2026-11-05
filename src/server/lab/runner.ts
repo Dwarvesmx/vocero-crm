@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
@@ -125,7 +125,7 @@ async function runAllCases(
   const kbEntries = await db
     .select()
     .from(schema.kbEntry)
-    .where(eq(schema.kbEntry.organizationId, organizationId));
+    .where(and(eq(schema.kbEntry.organizationId, organizationId), isNull(schema.kbEntry.demoSpaceId)));
   const kbText = renderKb(kbEntries);
 
   const profileRows = await db

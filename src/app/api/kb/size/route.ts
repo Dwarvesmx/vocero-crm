@@ -17,7 +17,7 @@ export const GET = withAuth(async (session) => {
   const entries = await db
     .select()
     .from(schema.kbEntry)
-    .where(and(scoped(schema.kbEntry.organizationId, session.organizationId),isNull(schema.kbEntry.documentId)))
+    .where(and(scoped(schema.kbEntry.organizationId, session.organizationId, isNull(schema.kbEntry.demoSpaceId)),isNull(schema.kbEntry.documentId)))
     .orderBy(asc(schema.kbEntry.createdAt));
   const chars = renderKb(entries).length;
   return Response.json({

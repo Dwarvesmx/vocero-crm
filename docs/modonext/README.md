@@ -2,6 +2,12 @@
 
 Registro técnico público sanitizado. Última actualización: 2026-11-03. Este índice distingue fuente probada, publicación y producción. La bitácora histórica completa continúa fuera de GitHub en el workspace del propietario (`docs/integraciones/ESTADO.md`); no se publican trazas de conversaciones, números, credenciales ni identificadores de infraestructura.
 
+## Demo Center V1 — arquitectura ARQ-01
+
+2026-11-04: **PLANEADO**, ARQ-01 cerrado documentalmente tras aprobación conceptual y ajuste final; sin implementación, migración ni despliegue. [Arquitectura y entregables](demo-center/01_ARQUITECTURA_V1.md). La frontera de cancelación del proveedor y el límite presupuestal condicionado están documentados.
+
+2026-11-04: Fase 1 IMPLEMENTADA LOCALMENTE con pruebas focalizadas en DEV. [Evidencia, revisión y pendientes](demo-center/07_FASE_1_DEV.md).
+
 ## Versiones y referencias
 
 | Componente | Versión | Rama existente | Fuente V1 probada | Imagen V1 |

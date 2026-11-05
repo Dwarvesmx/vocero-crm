@@ -1,4 +1,4 @@
-import { and, eq, asc } from "drizzle-orm";
+import { and, eq, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { withAuth, apiError, parseBody } from "@/lib/api";
 import { canConfigure } from "@/lib/auth/roles";
@@ -16,7 +16,7 @@ export const GET = withAuth(async (session, _req: Request, ctx: Context) => {
     if (!document)
         return apiError(404, "not_found", "Documento no encontrado.");
     const chunks = await getDb().select({ text: schema.kbEntry.content }).from(schema.kbEntry)
-        .where(and(eq(schema.kbEntry.organizationId, session.organizationId), eq(schema.kbEntry.documentId, id)))
+        .where(and(and(eq(schema.kbEntry.organizationId, session.organizationId), isNull(schema.kbEntry.demoSpaceId)), eq(schema.kbEntry.documentId, id)))
         .orderBy(asc(schema.kbEntry.createdAt), asc(schema.kbEntry.id)).limit(5);
     return Response.json({ document, preview: chunks.map(c => c.text).join("\n\n").slice(0, 10000) });
 });
@@ -27,7 +27,7 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Context) => {
     const body = await parseBody(req, z.object({ enabled: z.boolean() }));
     if (!body.ok)
         return body.response;
-    const [document] = await getDb().update(schema.kbDocument).set({ enabled: body.data.enabled, updatedAt: new Date() }).where(and(eq(schema.kbDocument.organizationId, session.organizationId), eq(schema.kbDocument.id, id))).returning();
+    const [document] = await getDb().update(schema.kbDocument).set({ enabled: body.data.enabled, updatedAt: new Date() }).where(and(and(eq(schema.kbDocument.organizationId, session.organizationId), isNull(schema.kbDocument.demoSpaceId)), eq(schema.kbDocument.id, id))).returning();
     return document ? Response.json({ document }) : apiError(404, "not_found", "Documento no encontrado.");
 });
 export const POST = withAuth(async (session, _req: Request, ctx: Context) => {

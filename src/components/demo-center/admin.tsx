@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DemoSimulator } from "./simulator";
 import { DemoKnowledgeAdmin } from "./knowledge";
 import { localInput, microToUsd, usdToMicro } from "./format";
 import type { demoKnowledge, consultarEspacio, consultarExcepciones, consultarPoliticaGlobal, listarEspacios } from "@/server/demo-center";
@@ -34,7 +35,7 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
     forms.forEach(form => { if (!baselines.current.has(form)) baselines.current.set(form, snapshot(form)); });
   });
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const tabs = detail ? [["general","General"],["assistant","Asistente"],["knowledge","Conocimiento"],["phones","Teléfonos"],["limits","Límites"],["audit","Auditoría"]] : global ? [["limits","Configuración global"]] : [["general","General"]];
+  const tabs = detail ? [["general","General"],["assistant","Asistente"],["knowledge","Conocimiento"],["phones","Teléfonos"],["limits","Límites"],["audit","Auditoría"],["simulator","Simulador"]] : global ? [["limits","Configuración global"]] : [["general","General"]];
   const active = tabs.some(([id]) => id === tab) ? tab : tabs[0]![0]!;
   useEffect(() => {
     const guard = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ""; } };
@@ -294,6 +295,7 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
             </li>)}</ul>
           </section>
           </div>
+          <div role="tabpanel" id="panel-simulator" aria-labelledby="tab-simulator" hidden={active !== "simulator"}><DemoSimulator key={space.id} spaceId={space.id} /></div>
           <div role="tabpanel" id="panel-knowledge" aria-labelledby="tab-knowledge" hidden={active !== "knowledge"}>
             {knowledge && <DemoKnowledgeAdmin id={space.id} knowledge={knowledge} />}
           </div>

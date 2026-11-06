@@ -1591,7 +1591,10 @@ export const demoAdminAudit = pgTable("demo_admin_audit", {
 
 export const demoSession = pgTable("demo_session", {
   id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
-  authorizationId: text("authorization_id").notNull(), conversationId: text("conversation_id").notNull(),
+  kind: text("kind").notNull().default("external"),
+  actorUserId: text("actor_user_id").references(() => user.id),
+  requestKey: text("request_key"),
+  authorizationId: text("authorization_id"), conversationId: text("conversation_id"),
   profileVersionId: text("profile_version_id").notNull(), routeGeneration: integer("route_generation").notNull(),
   state: text("state").notNull(), startedAt: demoTime("started_at").notNull(),
   expiresAt: demoTime("expires_at").notNull(), lastActivityAt: demoTime("last_activity_at").notNull(),
@@ -1606,6 +1609,9 @@ export const demoSession = pgTable("demo_session", {
     foreignColumns: [demoProfileVersion.organizationId,demoProfileVersion.spaceId,demoProfileVersion.id] }).onDelete("restrict"),
   foreignKey({ name: "demo_session_conversation_fk", columns: [t.organizationId,t.conversationId],
     foreignColumns: [conversation.organizationId,conversation.id] }).onDelete("restrict"),
+  unique().on(t.organizationId,t.actorUserId,t.requestKey),
+  check("demo_session_kind_ck", sql`(${t.kind} = 'internal' and ${t.actorUserId} is not null and ${t.requestKey} is not null and ${t.authorizationId} is null and ${t.conversationId} is null)
+    or (${t.kind} = 'external' and ${t.authorizationId} is not null and ${t.conversationId} is not null)`),
   index("demo_session_expiry_idx").on(t.organizationId,t.spaceId,t.state,t.expiresAt),
   check("demo_session_state_ck", sql`${t.state} in ('active','expired','revoked','superseded','closed')
     and ${t.routeGeneration} > 0 and ${t.expiresAt} > ${t.startedAt}`),
@@ -1667,9 +1673,13 @@ export const demoUsageOperation = pgTable("demo_usage_operation", {
   id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(), sessionId: text("session_id").notNull(),
   operationKey: text("operation_key").notNull(), kind: text("kind").notNull(), status: text("status").notNull(),
   reservedAmount: demoAmount("reserved_amount").notNull().default(sql`0`), actualAmount: demoAmount("actual_amount"),
+  inputHash: text("input_hash"), model: text("model"), userText: text("user_text"),
+  responseText: text("response_text"), evidence: jsonb("evidence"),
+  attemptedAt: demoTime("attempted_at"),
   providerRequestId: text("provider_request_id"), createdAt: demoTime("created_at").notNull().defaultNow(),
 }, t => [
   unique().on(t.organizationId,t.operationKey),
+  uniqueIndex("demo_llm_session_pending_uq").on(t.sessionId).where(sql`${t.kind} = 'provider_call' and ${t.status} in ('reserved','uncertain')`),
   foreignKey({ name: "demo_operation_session_fk", columns: [t.organizationId,t.spaceId,t.sessionId],
     foreignColumns: [demoSession.organizationId,demoSession.spaceId,demoSession.id] }).onDelete("restrict"),
   check("demo_operation_ck", sql`${t.kind} in ('session_start','inbound','response','provider_call')
@@ -1712,4 +1722,16 @@ export const demoLimitException = pgTable("demo_limit_exception", {
     foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
   index("demo_exception_scope_idx").on(t.organizationId,t.spaceId,t.expiresAt),
   check("demo_exception_values_ck", sql`${t.extraBudgetMicroUsd} > 0 and ${t.expiresAt} > ${t.createdAt}`),
+]);
+
+export const demoSimulationTurn = pgTable("demo_simulation_turn", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
+  sessionId: text("session_id").notNull(), requestKey: text("request_key").notNull(),
+  userText: text("user_text").notNull(), assistantText: text("assistant_text").notNull(),
+  createdAt: demoTime("created_at").notNull().defaultNow(),
+}, t => [
+  foreignKey({ name: "demo_sim_turn_session_fk", columns: [t.organizationId,t.spaceId,t.sessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.spaceId,demoSession.id] }).onDelete("restrict"),
+  unique().on(t.sessionId,t.requestKey),
+  index("demo_sim_turn_history_idx").on(t.organizationId,t.spaceId,t.sessionId,t.createdAt),
 ]);

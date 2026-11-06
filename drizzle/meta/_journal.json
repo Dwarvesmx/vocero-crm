@@ -267,6 +267,20 @@
       "when": 1793815455525,
       "tag": "0037_demo_center_budget_exceptions",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793915575904,
+      "tag": "0038_demo_internal_simulator",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793918168985,
+      "tag": "0039_demo_llm_consumption",
+      "breakpoints": true
     }
   ]
 }

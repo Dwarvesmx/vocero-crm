@@ -96,3 +96,11 @@ El HEAD documental puede avanzar después del commit de imagen: consultar el com
 ## Acceso para ChatGPT
 
 Compartir la URL de este índice y pedir consultar sus enlaces antes de una tarea. Los documentos son públicos y versionados; no implica sincronización automática ni memoria permanente del chat. Para fijar evidencia histórica, usar el enlace de archivo con SHA en lugar del nombre de rama. No publicar la bitácora privada ni materiales reales de clientes.
+
+## Demo Center · entrega simulada 2A
+
+2026-11-05: IMPLEMENTADO LOCALMENTE, circuito simulado probado con PostgreSQL descartable y navegador sintético. [Estado y límites](demo-center/08_FASE_2A.md). Proveedor real pendiente de controles de costo.
+
+2026-11-05: adaptador OpenRouter y ledger transaccional IMPLEMENTADOS LOCALMENTE y PROBADOS con proveedor controlado. 0039 aplicada en DEV con respaldo y conservación de datos. Activación real y prueba facturable pendientes de autorización/configuración. [Evidencia](demo-center/08_FASE_2A.md).
+
+2026-11-06: Fase 2A funcional local completada; dos conversaciones reales reportadas por el usuario y regresión financiera sintética 8/8. Sin despliegue ni autorización productiva. [Evidencia y límites](demo-center/08_FASE_2A.md).

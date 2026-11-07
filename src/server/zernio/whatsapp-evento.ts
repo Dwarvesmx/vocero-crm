@@ -6,7 +6,7 @@ import { normalizeMx } from "@/lib/meta/client";
 const texto = z.string().trim().min(1);
 const eventoSchema = z.object({
   id: texto,
-  event: z.enum(["message.received", "message.sent"]),
+  event: z.enum(["message.received", "message.sent", "message.delivered", "message.read", "message.failed"]),
   account: z.object({
     id: texto.optional(),
     accountId: texto.optional(),
@@ -29,6 +29,7 @@ const eventoSchema = z.object({
       businessScopedUserId: texto.optional(),
     }).optional(),
   }),
+  statusAt: z.string().datetime({offset:true}).optional(),
   metadata: z.object({ standby: z.boolean().optional() }).nullable().optional(),
 });
 
@@ -53,7 +54,8 @@ export function validarEventoWhatsAppZernio(input: {
       (accountId && accountId !== input.cuentaAutorizada)) return null;
   if (evento.message.conversationId !== evento.conversation.id) return null;
   if (evento.event === "message.received" && evento.message.direction !== "incoming") return null;
-  if (evento.event === "message.sent" && evento.message.direction !== "outgoing") return null;
+  if (evento.event !== "message.received" && evento.message.direction !== "outgoing") return null;
+  if(["message.delivered","message.read","message.failed"].includes(evento.event)&&!evento.statusAt)return null;
   return evento;
 }
 

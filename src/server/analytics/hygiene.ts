@@ -1,3 +1,4 @@
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { and, asc, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -141,9 +142,7 @@ async function mensajesFallidos(organizationId: string, now: Date) {
       )
     )
     .where(
-      scoped(
-        schema.message.organizationId,
-        organizationId,
+      scoped(schema.message.organizationId, organizationId, commercialMessageScope(),
         eq(schema.message.status, "failed"),
         gt(schema.message.createdAt, desde)
       )

@@ -37,13 +37,13 @@ export async function salientesDesdeElUltimoEntrante(
     from message m
     where m.organization_id = ${organizationId}
       and m.conversation_id = ${conversationId}
-      and m.direction = 'out'
+      and coalesce(m.scope_kind,'commercial')='commercial' and m.direction = 'out'
       and m.status <> 'failed'
       and m.created_at > coalesce((
         select max(e.created_at) from message e
         where e.organization_id = ${organizationId}
           and e.conversation_id = ${conversationId}
-          and e.direction = 'in'
+          and coalesce(e.scope_kind,'commercial')='commercial' and e.direction = 'in'
       ), '-infinity'::timestamp)
   `);
   return Number(rows[0]?.n ?? 0);

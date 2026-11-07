@@ -59,6 +59,17 @@ function getBus(): EventEmitter {
 }
 
 export function publish(organizationId: string, event: SseEvent): void {
+  if(event.type.startsWith("message.")){
+    void (async()=>{
+      const {getSql}=await import("@/lib/db");
+      const data=event.data as {messageId?:string;message?:{id?:string}};
+      const id=data.messageId??data.message?.id;
+      if(!id)return;
+      const [row]=await getSql()`select scope_kind from message where organization_id=${organizationId} and id=${id}`;
+      if(row && (row.scope_kind==null||row.scope_kind==='commercial'))getBus().emit(`org:${organizationId}`,event);
+    })().catch(()=>{}); // Ante duda de ámbito no publicar contenido.
+    return;
+  }
   getBus().emit(`org:${organizationId}`, event);
 }
 

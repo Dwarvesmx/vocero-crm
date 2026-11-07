@@ -1,3 +1,4 @@
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
@@ -394,7 +395,7 @@ async function resolverMensajeCitado(
     )
     .where(
       and(
-        eq(schema.message.organizationId, target.conversation.organizationId),
+        and(commercialMessageScope(), eq(schema.message.organizationId, target.conversation.organizationId)),
         eq(schema.message.conversationId, target.conversation.id),
         eq(schema.message.id, replyToMessageId)
       )

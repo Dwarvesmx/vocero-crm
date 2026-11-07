@@ -36,3 +36,27 @@ export async function enviarTextoWhatsAppZernio(input: {
   if (!parsed.success) throw new Error("Zernio no confirmó el identificador del mensaje");
   return parsed.data.data.messageId;
 }
+
+/** Consulta acotada al hilo/cuenta y al ID exacto ya confirmado; nunca asocia por texto.
+ * Sin ID tras ACK perdido no existe correlación demostrada: conservar incertidumbre.
+ */
+export async function consultarConfirmacionDemoZernio(input:{organizationId:string;accountRef:string;threadRef:string;requestKey:string;messageId:string|null}):Promise<{messageId:string;status:'sent'|'delivered'|'read'|'failed'}|null>{
+ if(!input.messageId)return null;
+ const {obtenerZernioWhatsAppPorOrg}=await import("./whatsapp-credenciales");
+ const cred=await obtenerZernioWhatsAppPorOrg(input.organizationId);
+ if(!cred||cred.accountRef!==input.accountRef)return null;
+ const pageSchema=z.object({messages:z.array(z.object({id:z.string(),accountId:z.string(),conversationId:z.string(),platform:z.string(),direction:z.string(),deliveryStatus:z.string().nullable().optional()})),pagination:z.object({hasMore:z.boolean().optional(),nextCursor:z.string().nullable().optional()}).optional()});
+ let cursor:string|undefined;
+ try{
+  for(let page=0;page<3;page++){
+   const query=new URLSearchParams({accountId:input.accountRef,sortOrder:'desc',limit:'50'});if(cursor)query.set('cursor',cursor);
+   const data=pageSchema.safeParse(await zernioFetch(`/inbox/conversations/${encodeURIComponent(input.threadRef)}/messages?${query}`,{token:cred.token,method:'GET',timeoutMs:15000}));
+   if(!data.success)return null;
+   const exact=data.data.messages.filter(m=>m.id===input.messageId&&m.accountId===input.accountRef&&m.conversationId===input.threadRef&&m.platform==='whatsapp'&&m.direction==='outgoing');
+   if(exact.length===1&&['sent','delivered','read','failed'].includes(exact[0]!.deliveryStatus??''))return {messageId:input.messageId,status:exact[0]!.deliveryStatus as 'sent'|'delivered'|'read'|'failed'};
+   if(exact.length>1||!data.data.pagination?.hasMore||!data.data.pagination.nextCursor||data.data.pagination.nextCursor===cursor)return null;
+   cursor=data.data.pagination.nextCursor;
+  }
+ }catch{/* Una consulta fallida no autoriza un nuevo envío. */}
+ return null;
+}

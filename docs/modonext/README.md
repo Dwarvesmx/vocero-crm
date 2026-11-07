@@ -104,3 +104,7 @@ Compartir la URL de este índice y pedir consultar sus enlaces antes de una tare
 2026-11-05: adaptador OpenRouter y ledger transaccional IMPLEMENTADOS LOCALMENTE y PROBADOS con proveedor controlado. 0039 aplicada en DEV con respaldo y conservación de datos. Activación real y prueba facturable pendientes de autorización/configuración. [Evidencia](demo-center/08_FASE_2A.md).
 
 2026-11-06: Fase 2A funcional local completada; dos conversaciones reales reportadas por el usuario y regresión financiera sintética 8/8. Sin despliegue ni autorización productiva. [Evidencia y límites](demo-center/08_FASE_2A.md).
+
+2026-11-06: Fase 2B en desarrollo local coordinado CRM/Nea autorizado; frontera de contrato inicial implementada, circuito externo pendiente. [Dependencias y alcance](demo-center/09_FASE_2B.md).
+
+2026-11-06: DC-F2B-07 PROBADO localmente: aislamiento comercial y despacho demo con outbox compartido, confirmaciones y conciliación mediante transporte controlado. WhatsApp real y activación externa pendientes. [Registro y evidencia](demo-center/09_FASE_2B.md).

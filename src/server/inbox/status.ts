@@ -35,6 +35,7 @@ export async function applyStatusUpdate(
       id: schema.message.id,
       conversationId: schema.message.conversationId,
       status: schema.message.status,
+      scope: schema.message.scopeKind,
     })
     .from(schema.message)
     .where(
@@ -46,7 +47,8 @@ export async function applyStatusUpdate(
     .limit(1);
   const msg = rows[0];
   if (!msg) return;
-  if (!isUpgrade(msg.status, next)) return;
+  if(msg.scope!=="commercial" && msg.scope!=null && next==="failed" && ["delivered","read"].includes(msg.status))return;
+  if (!isUpgrade(msg.status, next) && !(msg.scope==="demo"&&msg.status==="failed"&&["delivered","read"].includes(next))) return;
 
   const failure = status.errors?.[0];
   const error =

@@ -1,3 +1,4 @@
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -68,9 +69,7 @@ export async function resolverCitas(
       eq(schema.message.mediaAssetId, schema.mediaAsset.id)
     )
     .where(
-      scoped(
-        schema.message.organizationId,
-        organizationId,
+      scoped(schema.message.organizationId, organizationId, commercialMessageScope(),
         inArray(schema.message.waMessageId, wamids)
       )
     );

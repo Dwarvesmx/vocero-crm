@@ -1,3 +1,4 @@
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -42,9 +43,7 @@ export async function forwardMessage(input: {
       )
     )
     .where(
-      scoped(
-        schema.message.organizationId,
-        input.organizationId,
+      scoped(schema.message.organizationId, input.organizationId, commercialMessageScope(),
         eq(schema.message.id, input.sourceMessageId)
       )
     )

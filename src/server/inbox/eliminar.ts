@@ -101,6 +101,8 @@ export async function eliminarConversacion(
           )
       : [fila.conversation];
     const ids = conversaciones.map((c) => c.id);
+    const [protectedDemo]=await tx.select({id:schema.demoSession.id}).from(schema.demoSession).where(and(eq(schema.demoSession.organizationId,organizationId),inArray(schema.demoSession.conversationId,ids))).limit(1);
+    if(protectedDemo)return {ok:false,motivo:"no_encontrada"};
 
     /**
      * Una cita por venir detiene el borrado, en los dos alcances.

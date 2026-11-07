@@ -1,3 +1,4 @@
+import {commercialConversationScope} from "@/server/inbox/message-scope";
 import { eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -71,7 +72,7 @@ const conversacionId = sql.raw(`"conversation"."id"`);
 function cohorte(organizationId: string, start: Date, end: Date) {
   return scoped(
     schema.conversation.organizationId,
-    organizationId,
+    organizationId, commercialConversationScope(),
     eq(schema.conversation.isTest, false),
     gte(schema.conversation.createdAt, start),
     lt(schema.conversation.createdAt, end)
@@ -84,8 +85,8 @@ function cohorte(organizationId: string, start: Date, end: Date) {
  * cerebro externo por `/api/bot/messages` escriben igual.
  */
 async function conteosDeLaCohorte(organizationId: string, start: Date, end: Date) {
-  const entrante = sql`exists (select 1 from "message" mi where mi."conversation_id" = ${conversacionId} and mi."direction" = 'in')`;
-  const delAgente = sql`exists (select 1 from "message" mo where mo."conversation_id" = ${conversacionId} and mo."direction" = 'out' and mo."origin" = 'ai')`;
+  const entrante = sql`exists (select 1 from "message" mi where coalesce(mi."scope_kind",'commercial')='commercial' and mi."organization_id"=${organizationId} and mi."conversation_id" = ${conversacionId} and mi."direction" = 'in')`;
+  const delAgente = sql`exists (select 1 from "message" mo where coalesce(mo."scope_kind",'commercial')='commercial' and mo."organization_id"=${organizationId} and mo."conversation_id" = ${conversacionId} and mo."direction" = 'out' and mo."origin" = 'ai')`;
   const rows = await getDb()
     .select({
       total: sql<number>`count(*)::int`,
@@ -113,12 +114,12 @@ async function medianaPrimeraRespuesta(
   end: Date
 ): Promise<{ median: number | null; sample: number }> {
   const primerEntrante = sql`(select min(m1."created_at") from "message" m1
-    where m1."conversation_id" = ${conversacionId} and m1."direction" = 'in')`;
+    where coalesce(m1."scope_kind",'commercial')='commercial' and m1."organization_id"=${organizationId} and m1."conversation_id" = ${conversacionId} and m1."direction" = 'in')`;
   const rows = await getDb()
     .select({
       segundos: sql<number | null>`extract(epoch from (
         (select min(m2."created_at") from "message" m2
-          where m2."conversation_id" = ${conversacionId}
+          where coalesce(m2."scope_kind",'commercial')='commercial' and m2."organization_id"=${organizationId} and m2."conversation_id" = ${conversacionId}
             and m2."direction" = 'out' and m2."origin" = 'ai'
             and m2."created_at" > ${primerEntrante})
         - ${primerEntrante}

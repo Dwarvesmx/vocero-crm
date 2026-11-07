@@ -1,4 +1,6 @@
-import { and, eq, lte } from "drizzle-orm";
+import {MetaApiError} from "@/lib/meta/client";
+import {authorizeDemoDelivery} from "@/server/demo-center/infra/delivery";
+import { and, eq, lte,notInArray } from "drizzle-orm";
 import { publish } from "@/server/events/bus";
 import { getDb, schema } from "@/lib/db";
 import { descifrar } from "./whatsapp-credenciales";
@@ -10,6 +12,9 @@ import { enviarTextoWhatsAppZernio } from "./whatsapp-envio";
  * iniciado reenviando: si murió el proceso, su resultado es incierto.
  */
 export async function autorizarSalidaZernio(id: string) {
+  const [scope]=await getDb().select({kind:schema.message.scopeKind}).from(schema.zernioWhatsappOutbox).innerJoin(schema.message,eq(schema.message.id,schema.zernioWhatsappOutbox.messageId)).where(eq(schema.zernioWhatsappOutbox.id,id)).limit(1);
+  if(scope?.kind==='demo')return authorizeDemoDelivery(id);
+  if(scope?.kind && scope.kind!=='commercial')return null;
   if (process.env.ZERNIO_WHATSAPP_ENABLED !== "true" || process.env.ZERNIO_NEA_AUTO_ENABLED !== "true") return null;
   return getDb().transaction(async (tx) => {
     const [ref] = await tx.select().from(schema.zernioWhatsappOutbox).where(eq(schema.zernioWhatsappOutbox.id, id)).limit(1);
@@ -48,7 +53,13 @@ export async function liberarSalidaZernio(id: string) {
   try {
     wamid = await enviarTextoWhatsAppZernio({ token: credentials.token, cuentaAutorizada: job.accountRef,
       conversationId: job.threadRef, texto: text, idempotencyKey: job.requestKey });
-  } catch {
+  } catch(error) {
+    if(('demo' in authorized && authorized.demo) && error instanceof MetaApiError && [400,401,403,404,422].includes(error.status)){
+      await getDb().transaction(async tx=>{
+        const [failed]=await tx.update(schema.zernioWhatsappOutbox).set({status:"fallido",leasedUntil:null,updatedAt:new Date()}).where(and(eq(schema.zernioWhatsappOutbox.id,job.id),eq(schema.zernioWhatsappOutbox.status,"iniciado"),eq(schema.zernioWhatsappOutbox.attempts,job.attempts))).returning();
+        if(failed)await tx.update(schema.message).set({status:"failed",error:"Solicitud rechazada por el proveedor."}).where(eq(schema.message.id,job.messageId));
+      });return;
+    }
     await marcarIncierto(job.id, job.attempts);
     return;
   }
@@ -64,7 +75,7 @@ export async function liberarSalidaZernio(id: string) {
     if (done) await tx.update(schema.message).set({ status: "sent", waMessageId: wamid, error: null }).where(eq(schema.message.id, job.messageId));
     return { paused, done: Boolean(done) };
   });
-  if (!result.done) return;
+  if (!result.done || ('demo' in authorized && authorized.demo)) return;
   publish(job.organizationId, { type: "message.status", data: { conversationId: job.conversationId, messageId: job.messageId, status: "sent", error: null } });
   if (result.paused) publish(job.organizationId, { type: "conversation.updated", data: { conversation: { id: job.conversationId, aiEnabled: false, handoffReason: job.handoffReason } } });
 }
@@ -73,11 +84,11 @@ async function marcarIncierto(id: string, attempts: number) {
   await getDb().transaction(async (tx) => {
     const [job] = await tx.update(schema.zernioWhatsappOutbox).set({ status: "incierto", leasedUntil: null, updatedAt: new Date() })
       .where(and(eq(schema.zernioWhatsappOutbox.id, id), eq(schema.zernioWhatsappOutbox.status, "iniciado"), eq(schema.zernioWhatsappOutbox.attempts, attempts))).returning();
-    if (job) await tx.update(schema.message).set({ status: "failed", error: "Resultado externo incierto; conciliar antes de reenviar." }).where(eq(schema.message.id, job.messageId));
+    if (job) await tx.update(schema.message).set({ status: "failed", error: "Resultado externo incierto; conciliar antes de reenviar." }).where(and(eq(schema.message.id, job.messageId),notInArray(schema.message.status,["delivered","read"])));
   });
 }
 
-export async function recuperarSalidasInciertasZernio() {
-  const rows = await getDb().select().from(schema.zernioWhatsappOutbox).where(and(eq(schema.zernioWhatsappOutbox.status, "iniciado"), lte(schema.zernioWhatsappOutbox.leasedUntil, new Date())));
+export async function recuperarSalidasInciertasZernio(organizationId?:string) {
+  const rows = await getDb().select().from(schema.zernioWhatsappOutbox).where(and(eq(schema.zernioWhatsappOutbox.status, "iniciado"), lte(schema.zernioWhatsappOutbox.leasedUntil, new Date()),organizationId?eq(schema.zernioWhatsappOutbox.organizationId,organizationId):undefined));
   for (const row of rows) await marcarIncierto(row.id, row.attempts);
 }

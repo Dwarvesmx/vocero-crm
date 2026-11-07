@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq,sql } from "drizzle-orm";
 import { apiError, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -29,7 +29,8 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
       scoped(
         schema.mediaAsset.organizationId,
         session.organizationId,
-        eq(schema.mediaAsset.id, assetId)
+        eq(schema.mediaAsset.id, assetId),
+        sql`(not exists(select 1 from message dm where dm.organization_id=${session.organizationId} and dm.media_asset_id=${assetId} and coalesce(dm.scope_kind,'commercial')<>'commercial') or exists(select 1 from message cm where cm.organization_id=${session.organizationId} and cm.media_asset_id=${assetId} and coalesce(cm.scope_kind,'commercial')='commercial'))`
       )
     )
     .limit(1);

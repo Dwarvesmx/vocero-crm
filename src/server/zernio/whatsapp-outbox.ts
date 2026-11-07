@@ -26,10 +26,11 @@ export async function encolarEnvioWhatsAppZernio(input: {
   threadRef: string; text: string; requestKey: string; aiGenerated?: boolean; handoffReason?: string;
 }) {
   const db = getDb();
-  const buscar = async () => (await db.select({ job: schema.zernioWhatsappOutbox, text: schema.message.text, aiGenerated: schema.message.aiGenerated })
+  const buscar = async () => (await db.select({ job: schema.zernioWhatsappOutbox, text: schema.message.text, scope: schema.message.scopeKind, aiGenerated: schema.message.aiGenerated })
     .from(schema.zernioWhatsappOutbox).innerJoin(schema.message, eq(schema.message.id, schema.zernioWhatsappOutbox.messageId))
     .where(and(eq(schema.zernioWhatsappOutbox.organizationId, input.organizationId), eq(schema.zernioWhatsappOutbox.requestKey, input.requestKey))).limit(1))[0];
   const validar = (previo: NonNullable<Awaited<ReturnType<typeof buscar>>>) => {
+    if (previo.scope && previo.scope!=="commercial")throw new Error("Solicitud de otro ámbito");
     if (previo.job.conversationId !== input.conversationId || previo.text !== input.text ||
         previo.job.accountRef !== input.accountRef || previo.job.threadRef !== input.threadRef ||
         Boolean(previo.aiGenerated) !== Boolean(input.aiGenerated) || (previo.job.handoffReason ?? null) !== (input.handoffReason ?? null)) {
@@ -77,8 +78,9 @@ export async function procesarEnvioZernioReservado(job: Job) {
     if (Date.now() - job.createdAt.getTime() >= MAX_EDAD_MS) throw new MetaApiError("Ventana de idempotencia agotada", { status: 400 });
     const cred = await obtenerZernioWhatsAppPorOrg(job.organizationId);
     if (!cred || cred.accountRef !== job.accountRef) throw new MetaApiError("Cuenta no disponible", { status: 400 });
-    const [msg] = await db.select({ text: schema.message.text }).from(schema.message)
+    const [msg] = await db.select({ text: schema.message.text,scope:schema.message.scopeKind }).from(schema.message)
       .where(and(eq(schema.message.id, job.messageId), eq(schema.message.organizationId, job.organizationId))).limit(1);
+    if(msg?.scope && msg.scope!=="commercial")throw new MetaApiError("Ámbito no comercial",{status:400});
     if (!msg?.text) throw new MetaApiError("Mensaje no disponible", { status: 400 });
     const wamid = await enviarTextoWhatsAppZernio({ token: cred.token, cuentaAutorizada: job.accountRef,
       conversationId: job.threadRef, texto: msg.text, idempotencyKey: job.requestKey });
@@ -110,7 +112,7 @@ export async function barrerEnviosWhatsAppZernio() {
   if (process.env.ZERNIO_WHATSAPP_ENABLED !== "true") return;
   const db = getDb(), now = new Date();
   await recuperarSalidasInciertasZernio();
-  if (process.env.ZERNIO_NEA_AUTO_ENABLED === "true") {
+  if (process.env.ZERNIO_NEA_AUTO_ENABLED === "true" || process.env.DEMO_EXTERNAL_DELIVERY_ENABLED === "true") {
     const retenidos = await db.select({ id: schema.zernioWhatsappOutbox.id }).from(schema.zernioWhatsappOutbox)
       .where(eq(schema.zernioWhatsappOutbox.status, "retenido")).limit(20);
     for (const row of retenidos) await liberarSalidaZernio(row.id);

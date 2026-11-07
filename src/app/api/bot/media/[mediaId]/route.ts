@@ -1,3 +1,6 @@
+import {and,eq} from "drizzle-orm";
+import {getDb,schema} from "@/lib/db";
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { apiError } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
 import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
@@ -36,6 +39,8 @@ export async function GET(
     return apiError(422, "invalid", "mediaId inválido");
   }
 
+  const [owned]=await getDb().select({id:schema.message.id}).from(schema.message).innerJoin(schema.mediaAsset,eq(schema.message.mediaAssetId,schema.mediaAsset.id)).where(and(commercialMessageScope(),eq(schema.message.organizationId,organizationId),eq(schema.mediaAsset.waMediaId,mediaId))).limit(1);
+  if(!owned)return apiError(404,"not_found","Adjunto no disponible.");
   try {
     const { data, mimeType } = await downloadGraphMedia(
       creds.token,

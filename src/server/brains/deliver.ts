@@ -1,3 +1,4 @@
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -113,9 +114,7 @@ export async function rafagaDe(
       eq(schema.mediaAsset.id, schema.message.mediaAssetId)
     )
     .where(
-      scoped(
-        schema.message.organizationId,
-        organizationId,
+      scoped(schema.message.organizationId, organizationId, commercialMessageScope(),
         eq(schema.message.conversationId, conversationId)
       )
     )
@@ -145,9 +144,7 @@ export async function rafagaDe(
       eq(schema.mediaAsset.id, schema.message.mediaAssetId)
     )
     .where(
-      scoped(
-        schema.message.organizationId,
-        organizationId,
+      scoped(schema.message.organizationId, organizationId, commercialMessageScope(),
         and(
           eq(schema.message.conversationId, conversationId),
           eq(schema.message.direction, "in"),
@@ -156,7 +153,7 @@ export async function rafagaDe(
             select max(s.created_at) from message s
             where s.organization_id = ${organizationId}
               and s.conversation_id = ${conversationId}
-              and s.direction = 'out'
+              and coalesce(s.scope_kind,'commercial')='commercial' and s.direction = 'out'
               and s.ai_generated = false
           ), '-infinity'::timestamp)`
         )

@@ -1,3 +1,4 @@
+import {commercialMessageScope,commercialConversationScope} from "@/server/inbox/message-scope";
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
@@ -51,7 +52,7 @@ export async function listConversations(
     select coalesce(m.text, m.type)
     from message m
     where m.organization_id = ${schema.conversation.organizationId}
-      and m.conversation_id = ${schema.conversation.id}
+      and m.conversation_id = ${schema.conversation.id} and coalesce(m.scope_kind,'commercial')='commercial'
     order by m.created_at desc
     limit 1
   )`;
@@ -79,7 +80,7 @@ export async function listConversations(
     .where(
       scoped(
         schema.conversation.organizationId,
-        organizationId,
+        organizationId, commercialConversationScope(),
         eq(schema.conversation.isTest, false),
         since ? gt(schema.conversation.updatedAt, since) : undefined
       )
@@ -117,7 +118,7 @@ export async function getConversation(
     .where(
       scoped(
         schema.conversation.organizationId,
-        organizationId,
+        organizationId, commercialConversationScope(),
         eq(schema.conversation.id, conversationId)
       )
     )
@@ -140,9 +141,7 @@ export async function listMessages(
       eq(schema.message.mediaAssetId, schema.mediaAsset.id)
     )
     .where(
-      scoped(
-        schema.message.organizationId,
-        organizationId,
+      scoped(schema.message.organizationId, organizationId, commercialMessageScope(),
         eq(schema.message.conversationId, conversationId),
         since ? gt(schema.message.createdAt, since) : undefined
       )

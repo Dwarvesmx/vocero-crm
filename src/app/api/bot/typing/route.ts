@@ -1,3 +1,4 @@
+import {commercialMessageScope} from "@/server/inbox/message-scope";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     .from(schema.message)
     .where(
       and(
-        eq(schema.message.organizationId, organizationId),
+        and(commercialMessageScope(), eq(schema.message.organizationId, organizationId)),
         eq(schema.message.conversationId, conv.id),
         eq(schema.message.direction, "in"),
         isNotNull(schema.message.waMessageId)

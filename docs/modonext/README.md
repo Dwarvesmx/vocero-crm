@@ -8,6 +8,10 @@ Registro técnico público sanitizado. Última actualización: 2026-11-03. Este 
 
 2026-11-04: Fase 1 IMPLEMENTADA LOCALMENTE con pruebas focalizadas en DEV. [Evidencia, revisión y pendientes](demo-center/07_FASE_1_DEV.md).
 
+2026-11-07 · Portal comercial IMPLEMENTADO LOCALMENTE con invitaciones revocables y motor real reutilizado. Aceptación PostgreSQL pendiente. [Operación, evidencia y lanzamiento](demo-center/10_PORTAL_COMERCIAL.md).
+
+2026-11-07 · Integración WhatsApp de Demo Center IMPLEMENTADA LOCALMENTE. [Recorrido, contratos y requisitos de aceptación](demo-center/11_WHATSAPP_LANZAMIENTO.md).
+
 ## Versiones y referencias
 
 | Componente | Versión | Rama existente | Fuente V1 probada | Imagen V1 |

@@ -1,3 +1,6 @@
+import { after } from "next/server";
+import { recibirWhatsAppConSelector } from "@/server/demo-center/infra/whatsapp-selector";
+import { procesarEvento } from "@/server/webhooks/worker";
 import { recibirEvento } from "@/server/webhooks/recibir";
 import { obtenerZernioWhatsAppPorCuenta } from "@/server/zernio/whatsapp-credenciales";
 import { validarEventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
@@ -18,6 +21,11 @@ export async function POST(req: Request) {
     if (!cred) return new Response(null, { status: 401 });
     const evento = validarEventoWhatsAppZernio({ cuerpo, firma: req.headers.get("x-zernio-signature"), secreto: cred.secreto, cuentaAutorizada: cred.accountRef });
     if (!evento) return new Response(null, { status: 401 });
+    if (evento.event === "message.received") {
+      const id = await recibirWhatsAppConSelector(cred.organizationId, cred.accountRef, evento);
+      if (id) after(() => procesarEvento(id));
+      return Response.json({ received: true });
+    }
     return await recibirEvento("zernio_whatsapp", evento, cuerpo, "zernio-whatsapp", {
       organizationId: cred.organizationId, deduplicacion: `zernio-whatsapp:${cred.accountRef}:${evento.id}`,
     });

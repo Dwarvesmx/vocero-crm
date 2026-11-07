@@ -5,6 +5,7 @@ import {buildSimulatorMessages} from "../domain/simulator";
 import {settleDemoOperation} from "./finance";
 import {SimulatorError} from "./simulator";
 import type {DemoProvider,Quote} from "./openrouter";
+import {canalDemoWhatsApp} from "./whatsapp-link";
 export async function generateExternal(org:string,space:string,session:string,key:string,text:string,provider:DemoProvider){
  const db=getSql(),digest=createHash('sha256').update(text).digest('hex');
  const prepared=await db.begin(async sql=>{
@@ -13,6 +14,7 @@ export async function generateExternal(org:string,space:string,session:string,ke
     join demo_space p on (p.organization_id,p.id)=(s.organization_id,s.space_id)
     join demo_identity_route r on r.organization_id=s.organization_id and r.session_id=s.id and r.mode='demo' and r.generation=s.route_generation
     where s.organization_id=${org} and s.space_id=${space} and s.id=${session} and s.kind='external' and s.state='active'
+    and (${canalDemoWhatsApp()} or not exists(select 1 from demo_whatsapp_link l where l.organization_id=s.organization_id and l.external_session_id=s.id))
     and s.expires_at>clock_timestamp() and s.idle_deadline>clock_timestamp() and a.state='active' and p.status='active' and (a.expires_at is null or a.expires_at>clock_timestamp())
     and exists(select 1 from demo_identity_binding b where b.organization_id=s.organization_id and b.authorization_id=a.id and b.identity_lookup=r.identity_lookup and b.state='verified' and (b.expires_at is null or b.expires_at>clock_timestamp())) for update of s,a,p,r`;
   if(!s)throw new SimulatorError('authorization_unavailable',403);

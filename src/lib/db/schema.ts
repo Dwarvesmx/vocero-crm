@@ -1365,7 +1365,9 @@ export const dispatch = pgTable(
      */
     uniqueIndex("dispatch_conversation_vivo_uq")
       .on(t.conversationId)
-      .where(sql`${t.status} in ('pendiente', 'en_vuelo')`),
+      .where(sql`${t.scopeKind} = 'commercial' and ${t.status} in ('pendiente', 'en_vuelo')`),
+    index("dispatch_demo_queue_idx").on(t.demoSessionId, t.createdAt, t.id)
+      .where(sql`${t.scopeKind} = 'demo' and ${t.status} in ('pendiente', 'en_vuelo')`),
     /**
      * La tarjeta «Quién responde» pregunta por el último entregado y el último
      * fallido. Con `updated_at` en el índice esa pregunta cuesta lo mismo con
@@ -1594,6 +1596,7 @@ export const demoSession = pgTable("demo_session", {
   kind: text("kind").notNull().default("external"),
   actorUserId: text("actor_user_id").references(() => user.id),
   requestKey: text("request_key"),
+  webTokenHash: text("web_token_hash"),
   authorizationId: text("authorization_id"), conversationId: text("conversation_id"),
   profileVersionId: text("profile_version_id").notNull(), routeGeneration: integer("route_generation").notNull(),
   state: text("state").notNull(), startedAt: demoTime("started_at").notNull(),
@@ -1610,8 +1613,10 @@ export const demoSession = pgTable("demo_session", {
   foreignKey({ name: "demo_session_conversation_fk", columns: [t.organizationId,t.conversationId],
     foreignColumns: [conversation.organizationId,conversation.id] }).onDelete("restrict"),
   unique().on(t.organizationId,t.actorUserId,t.requestKey),
-  check("demo_session_kind_ck", sql`(${t.kind} = 'internal' and ${t.actorUserId} is not null and ${t.requestKey} is not null and ${t.authorizationId} is null and ${t.conversationId} is null)
-    or (${t.kind} = 'external' and ${t.authorizationId} is not null and ${t.conversationId} is not null)`),
+  unique("demo_session_web_token_hash_unique").on(t.webTokenHash),
+  check("demo_session_kind_ck", sql`(${t.kind} in ('internal','web') and ${t.actorUserId} is not null and ${t.requestKey} is not null and ${t.authorizationId} is null and ${t.conversationId} is null
+    and ((${t.kind} = 'web' and ${t.webTokenHash} is not null) or (${t.kind} = 'internal' and ${t.webTokenHash} is null)))
+    or (${t.kind} = 'external' and ${t.authorizationId} is not null and ${t.conversationId} is not null and ${t.webTokenHash} is null)`),
   index("demo_session_expiry_idx").on(t.organizationId,t.spaceId,t.state,t.expiresAt),
   check("demo_session_state_ck", sql`${t.state} in ('active','expired','revoked','superseded','closed')
     and ${t.routeGeneration} > 0 and ${t.expiresAt} > ${t.startedAt}`),
@@ -1645,6 +1650,28 @@ export const demoIdentityBinding = pgTable("demo_identity_binding", {
   uniqueIndex("demo_binding_verified_uq").on(t.organizationId,t.channel,t.accountRef,t.identityKind,t.identityLookup)
     .where(sql`${t.state} = 'verified'`),
   check("demo_binding_state_ck", sql`${t.state} in ('verified','revoked') and ${t.identityKind} in ('phone','bsuid') and ${t.version} > 0`),
+]);
+
+export const demoWhatsAppLink = pgTable("demo_whatsapp_link", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
+  webSessionId: text("web_session_id").notNull(), externalSessionId: text("external_session_id"),
+  accountRef: text("account_ref").notNull(), phoneLookup: text("phone_lookup").notNull(),
+  bsuidLookup: text("bsuid_lookup"), threadRef: text("thread_ref"),
+  challengeHash: text("challenge_hash").notNull(), createdAt: demoTime("created_at").notNull().defaultNow(),
+  expiresAt: demoTime("expires_at").notNull(), linkedAt: demoTime("linked_at"),
+}, t => [
+  unique().on(t.challengeHash),
+  unique().on(t.webSessionId),
+  unique().on(t.externalSessionId),
+  foreignKey({ name: "demo_wa_link_web_fk", columns: [t.organizationId,t.spaceId,t.webSessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.spaceId,demoSession.id] }).onDelete("restrict"),
+  foreignKey({ name: "demo_wa_link_external_fk", columns: [t.organizationId,t.spaceId,t.externalSessionId],
+    foreignColumns: [demoSession.organizationId,demoSession.spaceId,demoSession.id] }).onDelete("restrict"),
+  index("demo_wa_link_thread_idx").on(t.organizationId,t.accountRef,t.threadRef),
+  index("demo_wa_link_phone_idx").on(t.organizationId,t.accountRef,t.phoneLookup),
+  index("demo_wa_link_bsuid_idx").on(t.organizationId,t.accountRef,t.bsuidLookup),
+  check("demo_wa_link_state_ck", sql`(${t.externalSessionId} is null and ${t.threadRef} is null and ${t.linkedAt} is null and ${t.bsuidLookup} is null)
+    or (${t.externalSessionId} is not null and ${t.threadRef} is not null and ${t.linkedAt} is not null)`),
 ]);
 
 export const demoSessionEvent = pgTable("demo_session_event", {

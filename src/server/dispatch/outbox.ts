@@ -94,6 +94,7 @@ export async function encolarDespacho(params: {
       .where(
         and(
           eq(schema.dispatch.conversationId, params.conversationId),
+          eq(schema.dispatch.scopeKind, "commercial"),
           inArray(schema.dispatch.status, ["pendiente", "en_vuelo"])
         )
       )
@@ -201,7 +202,12 @@ export async function tomarPendientes(
     .select()
     .from(schema.dispatch)
     .where(
-      or(
+      and(sql`(${schema.dispatch.scopeKind} <> 'demo' or not exists (
+        select 1 from dispatch anterior where anterior.organization_id=${schema.dispatch.organizationId}
+        and anterior.demo_session_id=${schema.dispatch.demoSessionId} and anterior.scope_kind='demo'
+        and anterior.status in ('pendiente','en_vuelo')
+        and (anterior.created_at,anterior.id)<(${schema.dispatch.createdAt},${schema.dispatch.id})
+      ))`, or(
         and(
           eq(schema.dispatch.status, "pendiente"),
           lte(schema.dispatch.notBefore, ahora)
@@ -211,7 +217,7 @@ export async function tomarPendientes(
           eq(schema.dispatch.status, "en_vuelo"),
           lte(schema.dispatch.leasedUntil, ahora)
         )
-      )
+      ))
     )
     .orderBy(schema.dispatch.notBefore)
     .limit(limite);

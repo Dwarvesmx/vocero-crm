@@ -281,6 +281,20 @@
       "when": 1793918168985,
       "tag": "0039_demo_llm_consumption",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794034512145,
+      "tag": "0040_demo_web_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794036323218,
+      "tag": "0041_demo_whatsapp_link",
+      "breakpoints": true
     }
   ]
 }

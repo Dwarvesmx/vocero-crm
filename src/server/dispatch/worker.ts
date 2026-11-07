@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { leerConfigDespacho } from "@/server/brains/config";
+import { construirDespachoWhatsAppDemo } from "@/server/demo-center/infra/whatsapp-dispatch";
 import { finalizarConPendientes } from "@/server/dispatch/transaccion";
 import {
   construirEvento,
@@ -157,6 +158,16 @@ async function procesar(fila: FilaDespacho): Promise<void> {
     // Quedó de antes de que se quitara o se rompiera la configuración: ya no
     // hay a quién entregarlo, y el agente incluido vuelve a ser quien manda.
     await descartarDespacho(fila, "el despacho ya no está configurado");
+    return;
+  }
+  if (fila.scopeKind === "demo") {
+    const evento = await construirDespachoWhatsAppDemo(fila);
+    if (!evento) { await descartarDespacho(fila, "demo no vigente"); return; }
+    const resultado = await entregar(evento, config);
+    if (!(await renovarLease(fila))) return;
+    if (resultado.ok) await marcarEntregado(fila);
+    else if (resultado.reintentable) await reintentarOCaducar(fila, resultado.detalle);
+    else await descartarDespacho(fila, resultado.detalle);
     return;
   }
 

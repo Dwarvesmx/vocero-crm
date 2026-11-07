@@ -13,7 +13,7 @@ export async function encolarEnTransaccion(tx: Tx, organizationId: string, conve
     (id, organization_id, conversation_id, status, not_before, first_message_at, last_message_at, message_ids)
     values (${newId("dispatch")}, ${organizationId}, ${conversationId}, 'pendiente',
       ${due.toISOString()}::timestamp, ${now.toISOString()}::timestamp, ${now.toISOString()}::timestamp, ${JSON.stringify(ids)}::jsonb)
-    on conflict (conversation_id) where status in ('pendiente', 'en_vuelo')
+    on conflict (conversation_id) where scope_kind='commercial' and status in ('pendiente', 'en_vuelo')
     do update set message_ids = coalesce(dispatch.message_ids, '[]'::jsonb) || excluded.message_ids,
       not_before = case when dispatch.status='en_vuelo' then dispatch.not_before else excluded.not_before end,
       last_message_at = excluded.last_message_at, updated_at = excluded.last_message_at`);

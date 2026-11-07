@@ -4,6 +4,7 @@ import {apiError,parseBody} from "@/lib/api";
 import {requireBotKey,resolveInstanceOrg} from "@/server/bot/auth";
 import {configuredDemoProvider,realDemoSend,reconcileDemoOperation} from "@/server/demo-center/infra/finance";
 import {SimulatorError} from "@/server/demo-center/infra/simulator";
+import {canalDemoWhatsApp} from "@/server/demo-center/infra/whatsapp-link";
 const id=z.string().min(1).max(128);
 const request=z.object({contractVersion:z.literal(1),action:z.enum(['reserve','query','release','settle']),organizationId:id,spaceId:id,sessionId:id,operationKey:id,inputDigest:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 export async function POST(req:Request){
@@ -20,6 +21,10 @@ export async function POST(req:Request){
   let [op]=await sql`select * from demo_usage_operation where organization_id=${org} and operation_key=${b.operationKey}`;
   if(op&&(op.session_id!==s.id||op.space_id!==b.spaceId||op.input_hash!==expected))throw new SimulatorError('request_conflict');
   if(b.action==='reserve'){
+   if(!canalDemoWhatsApp()){
+    const [linked]=await sql`select 1 from demo_whatsapp_link where organization_id=${org} and external_session_id=${s.id}`;
+    if(linked)throw new SimulatorError('authorization_unavailable',403);
+   }
    const [valid]=await sql`select s.id from demo_session s join demo_authorization a on a.id=s.authorization_id and a.organization_id=s.organization_id
     join demo_identity_route r on r.session_id=s.id and r.organization_id=s.organization_id and r.mode='demo' and r.generation=s.route_generation
     where s.id=${s.id} and s.state='active' and s.expires_at>clock_timestamp() and s.idle_deadline>clock_timestamp() and a.state='active' and (a.expires_at is null or a.expires_at>clock_timestamp()) and exists(select 1 from demo_identity_binding b where b.organization_id=s.organization_id and b.space_id=s.space_id and b.authorization_id=a.id and b.identity_lookup=r.identity_lookup and b.state='verified' and (b.expires_at is null or b.expires_at>clock_timestamp()))`;

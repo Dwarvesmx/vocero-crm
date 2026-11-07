@@ -4,10 +4,15 @@ import {SimulatorError} from './simulator';
 import {externalIdentityLookup} from './external-session';
 import {descifrar} from '@/server/zernio/whatsapp-credenciales';
 import {consultarConfirmacionDemoZernio} from '@/server/zernio/whatsapp-envio';
+import {canalDemoWhatsApp} from './whatsapp-link';
 
 async function resolve(sql:ReturnType<typeof getSql>,org:string,session:string,operation:string){
  const [row]=await sql`select s.id as session_id,s.space_id,s.route_generation,s.authorization_id,
-  c.id as conversation_id,c.channel_thread_ref,c.ai_enabled,c.handoff_at,c.handoff_pending_message_id,(c.last_inbound_at at time zone 'UTC') as last_inbound_at,t.wa_identity,
+  c.id as conversation_id,c.channel_thread_ref,c.ai_enabled,c.handoff_at,c.handoff_pending_message_id,
+  case when exists(select 1 from demo_whatsapp_link l where l.organization_id=s.organization_id and l.external_session_id=s.id)
+    then (select max(m.wa_timestamp) at time zone 'UTC' from message m where m.organization_id=s.organization_id
+      and m.demo_session_id=s.id and m.direction='in' and m.scope_kind='demo')
+    else (c.last_inbound_at at time zone 'UTC') end as last_inbound_at,t.wa_identity,
   a.state as authorization_state,a.expires_at as authorization_expiry,p.status as space_state,s.state as session_state,s.expires_at,s.idle_deadline,
   b.account_ref,b.identity_kind,b.identity_lookup,b.expires_at as binding_expiry,b.state as binding_state,r.mode,r.generation,
   o.id as operation_id,o.response_text,o.status as financial_state
@@ -19,6 +24,7 @@ async function resolve(sql:ReturnType<typeof getSql>,org:string,session:string,o
   join contact t on (t.organization_id,t.id)=(c.organization_id,c.contact_id)
   join demo_usage_operation o on o.organization_id=s.organization_id and o.session_id=s.id and o.operation_key=${operation}
   where s.organization_id=${org} and s.id=${session} and s.kind='external' and c.channel='whatsapp' and not c.is_test
+  and (${canalDemoWhatsApp()} or not exists(select 1 from demo_whatsapp_link l where l.organization_id=s.organization_id and l.external_session_id=s.id))
   and b.state='verified' for update of s,a,p,r,b,c,t,o`;
  if(!row)throw new SimulatorError('not_found',404);
  const [clock]=await sql`select clock_timestamp() as now`;

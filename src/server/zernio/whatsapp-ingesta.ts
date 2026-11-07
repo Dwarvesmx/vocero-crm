@@ -4,6 +4,7 @@ import { ingestInboundMessage } from "@/server/inbox/ingest";
 import { obtenerZernioWhatsAppPorCuenta } from "@/server/zernio/whatsapp-credenciales";
 import { normalizarEntranteWhatsAppZernio, permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
 import { procesarSalienteWhatsAppZernio } from "@/server/zernio/whatsapp-saliente";
+import { resolverIngresoComercialWhatsApp } from "@/server/demo-center/infra/whatsapp-selector";
 
 /** El worker solo recibe eventos autenticados y guardados por la ruta. */
 export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<void> {
@@ -20,13 +21,19 @@ export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<
     return;
   }
   if (evento.event === "message.sent") {
+    if (evento.message.source === "whatsapp_business_app" &&
+        (await resolverIngresoComercialWhatsApp(cred.organizationId, accountRef, evento)).blocked) return;
     await procesarSalienteWhatsAppZernio(cred.organizationId, evento);
     return;
   }
   const entrada = normalizarEntranteWhatsAppZernio(evento);
   if (!entrada || !entrada.text) throw new Error("Mensaje de WhatsApp no soportado");
+  const comercial = await resolverIngresoComercialWhatsApp(cred.organizationId, accountRef, evento);
+  if (comercial.blocked) return;
   await ingestInboundMessage({
-    organizationId: cred.organizationId, identity: entrada.identity,
+    organizationId: cred.organizationId, identity: comercial.phone
+      ? { ...entrada.identity, identity: comercial.phone, phone: comercial.phone, waUserId: null }
+      : entrada.identity,
     waMessageId: entrada.waMessageId, type: "text", text: entrada.text,
     timestamp: entrada.timestamp, threadRef: entrada.threadRef,
     // Esta etapa solo habilita atención manual; Nea se integra después.

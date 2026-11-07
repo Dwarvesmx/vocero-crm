@@ -1,0 +1,37 @@
+# WA-LANZAMIENTO-01 · Demo Center por WhatsApp
+
+2026-11-07 · IMPLEMENTADO LOCALMENTE. Baselines CRM `a0b4c685` y Nea `36d6e968`. Se conservó el portal web y su migración 0040. La migración 0041 agrega la vinculación y separa la cola demo del índice de agrupación comercial. No se aplicó a bases persistentes.
+
+## Recorrido y selección
+
+1. En Demo Center, verificar el perfil publicado, conocimiento y límites de cada espacio. Desde **Demo web**, emitir una invitación por espacio. En el portal el visitante elige NOVA o Casa Horizonte, abre **Probar por WhatsApp** e introduce su número con código de país.
+2. El enlace abre el número receptor configurado y contiene un reto aleatorio de un solo uso. El reto dura como máximo cinco minutos y se asocia con la invitación, cuenta y huella del teléfono esperado. No se activa con el formulario ni con el enlace por sí solo. El visitante debe enviar el código. El CRM exige firma Zernio válida, cuenta receptora exacta, vigencia y coincidencia con `message.sender.phoneNumber`. El reto nunca se envía a Nea, a Lukas ni al modelo.
+3. El BSUID se registra como alias solo cuando aparece con el teléfono acreditado en el mismo evento firmado. Un primer mensaje que trae solo BSUID no acredita el número. Una vez vinculado, el mismo alias puede identificar al visitante dentro de la misma cuenta e hilo. Identidades contradictorias, hilos ambiguos y retos inválidos se excluyen del flujo comercial.
+4. Después de ver **Sesión vinculada** en el portal, el visitante envía una pregunta desde el mismo hilo. La sesión fija el perfil publicado del espacio, usa sus límites y no lee memoria o conocimiento comercial. El chat web sigue disponible y tiene su propia sesión. Reservar capacidad para las dos sesiones si se ofrecen ambos canales. El cierre y la revocación bloquean la ruta. Elegir otra invitación y acreditarla de nuevo sustituye la sesión previa y aumenta la generación.
+5. **Finalizar WhatsApp** cierra el canal demo. El visitante puede solicitar información por el contacto comercial existente. Para volver a Lukas en el mismo hilo, un administrador revisa y concilia trabajos pendientes, confirma **Restituir atención comercial** y solicita un mensaje nuevo. Los mensajes de cuarentena quedan aislados. La restitución conserva un corte temporal y rechaza cualquier evento anterior o ambiguo. Si hubo un despacho comercial reciente, espera conservadora de hasta 24 h desde su aceptación antes de restituir.
+
+## Contratos
+
+- `POST /api/demo/web` admite `startWhatsApp` con teléfono y `finishWhatsApp` bajo el token del portal. `GET` informa estado y vencimiento. `/api/demo-center/web` mantiene los permisos de configuración y agrega restitución por generación y conciliación por ámbito.
+- `POST /api/webhooks/zernio-whatsapp` valida firma y cuenta. Para entrantes, fija el ámbito y deduplica por cuenta e ID de mensaje de plataforma antes del 200. En demo guarda el mensaje y la fila del despacho en el mismo commit. El worker comercial vuelve a verificar eventos rezagados y la autorización comercial de salida excluye hilos activos o bloqueados.
+- CRM entrega el sobre v1 firmado a Nea en `POST /vocero/dispatch`. Nea valida cuenta, clase, identidad y contacto antes de aceptar el trabajo durable. Reutiliza `/api/bot/demo/session`, `finance`, `generate` y `delivery`. La salida física reutiliza el outbox Zernio de CRM. El ACK de transporte significa aceptación. Solo un callback o consulta correlacionados confirma entrega. Un resultado incierto sin identificador verificable queda retenido para revisión.
+- Referencias oficiales: [Inbox WhatsApp](https://docs.zernio.com/platforms/whatsapp/inbox), [firma e identidad del webhook](https://docs.zernio.com/resources/migrations/migrating-from-kapso). La compatibilidad documental no acredita los datos efectivamente entregados por la cuenta ModoNext.
+
+Cambios CRM: `server/demo-center/domain/whatsapp.ts`, `infra/whatsapp-{selector,link,dispatch}.ts`, ajustes puntuales en `infra/{web,external-session,generation,delivery}.ts`, API de portal, administración, webhook y reserva, componentes `portal.tsx` y `web-admin.tsx`, cola `dispatch/{outbox,transaccion,worker}.ts`, guardas Zernio de ingesta y salida, esquema y migración 0041 con snapshot y journal. Pruebas de ruta, ingesta, navegador e integración con el ejecutor aislado.
+
+Cambios Nea: `app/demo_contract.py`, `tests/test_demo_contract.py` y `tests/demo_whatsapp_probe.py`. El consumidor, los clientes y sus migraciones anteriores se reutilizan.
+
+## Verificación local y primera prueba real
+
+`node scripts/test-demo-whatsapp-isolated.mjs` crea un clúster PostgreSQL 16 nuevo en el directorio local de pruebas, en `127.0.0.1:55534`, aplica las migraciones a esa instancia y la detiene al terminar. El gateway de pruebas escucha solo en `127.0.0.1:55535`. Requiere el entorno Python local de Nea con las dependencias de pruebas instaladas. Se puede indicar su ejecutable con `DEMO_WA_PYTHON`. OpenRouter y Zernio son adaptadores controlados en la suite. Nunca dirigirla a una base persistente.
+
+Evidencia DEV: 40 pruebas focalizadas de CRM, incluyendo interfaz Chrome a 390 y 1440 px, y 18 pruebas focalizadas de Nea. La integrada cruza webhook firmado, cola PostgreSQL, aceptación idempotente en Nea, llamadas HTTP autenticadas al gateway, reserva previa, liquidación única de 5 micro-USD sintéticos, outbox y callback de entrega firmado. También cubre cuenta o identidad inválida, cambio de perfil, presupuesto insuficiente, cuota agotada, revocación, cuarentena y restitución de un mensaje nuevo. Typecheck, ESLint focalizado y diff check aprobados.
+
+Primera prueba real, pendiente de autorización operativa específica:
+
+1. Confirmar número, cuenta y organización de destino, permisos de la suscripción y disponibilidad de perfiles publicados NOVA y Casa Horizonte. En particular, comprobar que el webhook de esa cuenta entrega un teléfono explícito al vincular y revisar callbacks de estado. Si el remitente llega inicialmente solo con BSUID, el enlace automático queda bloqueado.
+2. Publicar los commits e imágenes exactos que se aprueben. Verificar respaldo y restauración aplicables antes de desplegar CRM con 0040/0041. Nea no requiere migración nueva. Confirmar que Vocero y Nea comparten la identidad de servicio ya configurada. Las escrituras de Coolify y del proveedor se autorizan por separado.
+3. En la instancia de prueba, CRM necesita `DEMO_WHATSAPP_ENABLED=true`, `DEMO_WHATSAPP_NUMBER` con el número receptor comprobado, `ZERNIO_WHATSAPP_ENABLED=true`, `DEMO_WEB_ENABLED=true`, `DEMO_REAL_ENABLED=true`, `DEMO_EXTERNAL_SESSIONS_ENABLED=true`, `DEMO_EXTERNAL_GENERATION_ENABLED=true` y `DEMO_EXTERNAL_DELIVERY_ENABLED=true`. Nea necesita `DEMO_CONSUMER_ENABLED=true` y `DEMO_DELIVERY_ENABLED=true` en su modo de una sola instancia CRM. El transporte y la firma usan `BRAIN_DISPATCH_URL`, `BOT_API_KEY`, `CRM_BASE_URL` y `CRM_BOT_API_KEY` existentes. Las banderas demo quedan apagadas por defecto. No cambiar la lista comercial de Nea ni habilitar el perfil Lukas para que funcione demo.
+4. Autorizar un importe acotado y teléfonos controlados. Probar vínculo, una pregunta, continuidad, cambio de espacio, cierre y revocación. Comprobar en administración reservas, cargos, aceptación y confirmación por separado. Después de restituir, probar un mensaje comercial nuevo solo si ese paso está autorizado.
+
+No hubo cambios en el VPS, webhooks externos, credenciales, App Purificadora, mensajes reales ni cargos. No se publicaron cambios Git.

@@ -3,6 +3,7 @@ import {getSql} from "@/lib/db";
 import {getEnv} from "@/lib/env";
 import type {ExternalSessionRequest} from "../domain/external-session";
 import {SimulatorError} from "./simulator";
+import type { Row, TransactionSql } from "postgres";
 
 /** Identidad acreditada por vínculo administrativo; BSUID nunca se infiere como teléfono. */
 export function externalIdentityLookup(org:string,account:string,kind:string,value:string){
@@ -54,6 +55,12 @@ export async function resolveExternalSession(org:string,input:ExternalSessionReq
    return response(session);
   }
   if(prior)throw new SimulatorError('route_blocked');
+  return iniciarSesionWhatsApp(sql,org,input,binding,lookup,policies,now);
+ }).then(result=>{if('denied' in result)throw new SimulatorError('authorization_unavailable',403);return result;});
+}
+
+export async function iniciarSesionWhatsApp(sql:TransactionSql,org:string,input:ExternalSessionRequest,binding:Row,lookup:string,policies:Row[],now:Date,route?:Row){
+  if(policies.length!==2)throw new SimulatorError('policy_required');
   for(const p of policies){
    if(!p.enabled||new Date(p.window_start)>now||new Date(p.window_end)<=now||Math.min(p.max_duration_seconds,p.max_idle_seconds,p.max_concurrent_sessions,p.max_sessions_started)<=0)throw new SimulatorError('policy_required');
    const [count]=await sql`select count(*) filter(where state='active' and expires_at>clock_timestamp() and idle_deadline>clock_timestamp())::int as active,
@@ -61,15 +68,16 @@ export async function resolveExternalSession(org:string,input:ExternalSessionReq
     from demo_session where organization_id=${org} and (${p.space_id}::text is null or space_id=${p.space_id})`;
    if(count!.active>=p.max_concurrent_sessions||count!.started>=p.max_sessions_started)throw new SimulatorError('quota_exceeded',429);
   }
-  const id=randomUUID();const generation=1;
+  const id=randomUUID();const generation=route?Number(route.generation)+1:1;
   const duration=Math.min(...policies.map(p=>Number(p.max_duration_seconds))),idle=Math.min(...policies.map(p=>Number(p.max_idle_seconds)));
   const [session]=await sql`insert into demo_session(id,organization_id,space_id,kind,request_key,authorization_id,conversation_id,profile_version_id,route_generation,state,started_at,expires_at,last_activity_at,idle_deadline,limits_snapshot)
    values(${id},${org},${binding.space_id},'external',${input.requestKey},${binding.authorization_id},${input.conversationId},${binding.current_profile_version_id},${generation},'active',clock_timestamp(),clock_timestamp()+${duration}*interval '1 second',clock_timestamp(),clock_timestamp()+${idle}*interval '1 second',${sql.typed(JSON.stringify(policies),25)}::jsonb) returning *`;
-  await sql`insert into demo_identity_route(id,organization_id,channel,identity_lookup,mode,session_id,generation) values(${randomUUID()},${org},${input.channel},${lookup},'demo',${id},${generation})`;
-  await sql`insert into demo_session_event(id,organization_id,space_id,session_id,type,actor,reason_code) values(${randomUUID()},${org},${binding.space_id},${id},'external_started','nea','verified_binding')`;
+  if(route)await sql`update demo_identity_route set mode='demo',session_id=${id},generation=${generation},
+    blocked_since=null,blocked_reason=null,review_due_at=null where id=${route.id}`;
+  else await sql`insert into demo_identity_route(id,organization_id,channel,identity_lookup,mode,session_id,generation) values(${randomUUID()},${org},${input.channel},${lookup},'demo',${id},${generation})`;
+  await sql`insert into demo_session_event(id,organization_id,space_id,session_id,type,actor,reason_code) values(${randomUUID()},${org},${binding.space_id},${id},'external_started','crm_nea','verified_binding')`;
   const key=randomUUID();
   await sql`insert into demo_admin_audit(id,organization_id,space_id,actor_user_id,action,target_id,reason_code,request_id,result) values(${key},${org},${binding.space_id},${binding.verified_by},'external_session_started',${id},'verified_binding',${key},'success')`;
   return response(session!);
- }).then(result=>{if('denied' in result)throw new SimulatorError('authorization_unavailable',403);return result;});
 }
 function response(s:Record<string,unknown>){return {contractVersion:1,sessionId:s.id,state:s.state,organizationId:s.organization_id,spaceId:s.space_id,conversationId:s.conversation_id,authorizationId:s.authorization_id,profileVersionId:s.profile_version_id,routeGeneration:s.route_generation,expiresAt:new Date(s.expires_at as string).toISOString(),idleDeadline:new Date(s.idle_deadline as string).toISOString()};}

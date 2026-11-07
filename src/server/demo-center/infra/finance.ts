@@ -16,13 +16,15 @@ export async function configuredDemoProvider(org:string) {
   if(!resolved.ok || apiRoot(resolved.provider.baseUrl)!==apiRoot(OPENROUTER_BASE_URL)) throw new SimulatorError("openrouter_required");
   return openRouterProvider(resolved.provider.token,resolved.provider.model);
 }
-export async function realDemoSend(actor:AdminActor, command:Send, provider:DemoProvider, external = false, reserveOnly = false) {
+export async function realDemoSend(actor:AdminActor, command:Send, provider:DemoProvider, external = false, reserveOnly = false, web = false) {
   if(external&&!reserveOnly)throw new SimulatorError("external_execution_not_enabled",403);
+  const kind=external?"external":web?"web":"internal";
   const db=getSql(),org=actor.organizationId;
   // Lookup antes de cotizar: una respuesta repetida nunca ejecuta otra generación.
   const [existing]=await db`select o.* from demo_usage_operation o join demo_session s on s.id=o.session_id
     where o.organization_id=${org} and o.operation_key=${command.requestKey}
-      and o.space_id=${command.spaceId} and o.session_id=${command.sessionId} and ((${external} and s.kind='external') or (not ${external} and s.actor_user_id=${actor.userId}))`;
+      and o.space_id=${command.spaceId} and o.session_id=${command.sessionId} and s.kind=${kind}
+      and (${external} or s.actor_user_id=${actor.userId})`;
   if(existing){
     if(existing.input_hash!==hash(command.text))throw new SimulatorError("request_conflict");
     return {id:command.sessionId,operationId:existing.id,status:existing.status};
@@ -36,7 +38,7 @@ export async function realDemoSend(actor:AdminActor, command:Send, provider:Demo
     await sql`select id from organization where id=${org} for update`;
     const [space]=await sql`select * from demo_space where organization_id=${org} and id=${command.spaceId} for update`;
     const [session]=await sql`select * from demo_session where organization_id=${org} and space_id=${command.spaceId}
-      and id=${command.sessionId} and ((${external} and kind='external') or (not ${external} and kind='internal' and actor_user_id=${actor.userId})) for update`;
+      and id=${command.sessionId} and kind=${kind} and (${external} or actor_user_id=${actor.userId}) for update`;
     if(!space||!session)throw new SimulatorError("not_found",404);
     if(external){
       const [validExternal]=await sql`select s.id from demo_session s join demo_authorization a on (a.organization_id,a.space_id,a.id)=(s.organization_id,s.space_id,s.authorization_id)
@@ -104,14 +106,15 @@ export async function realDemoSend(actor:AdminActor, command:Send, provider:Demo
   const authorized=await db.begin(async sql=>{
     await sql`select id from organization where id=${org} for update`;
     const [s]=await sql`select s.id from demo_session s join demo_space p on p.id=s.space_id
-      where s.id=${command.sessionId} and s.organization_id=${org} and s.actor_user_id=${actor.userId}
-      and s.state='active' and p.status='active' and s.expires_at>clock_timestamp() and s.idle_deadline>clock_timestamp()`;
+      where s.id=${command.sessionId} and s.organization_id=${org} and s.actor_user_id=${actor.userId} and s.kind=${kind}
+      and s.state='active' and p.status='active' and s.expires_at>clock_timestamp() and s.idle_deadline>clock_timestamp()
+      for update of p,s`;
     const [op]=await sql`select evidence from demo_usage_operation where id=${prepared.id}`;
     const saved=op?.evidence?.policies as Array<{id:string;version:number}> | undefined;
     const current=await sql`select id,version from demo_limits where organization_id=${org}
       and (space_id is null or space_id=${command.spaceId}) and enabled=true and window_start<=clock_timestamp() and window_end>clock_timestamp()`;
     const samePolicies=saved?.length===2 && saved.every(p=>current.some(c=>c.id===p.id && c.version===p.version));
-    if(!s || !samePolicies){await sql`update demo_usage_operation set status='released' where id=${prepared.id} and status='reserved'`;return false;}
+    if(!s || !samePolicies || (web && process.env.DEMO_WEB_ENABLED !== "true")){await sql`update demo_usage_operation set status='released' where id=${prepared.id} and status='reserved'`;return false;}
     const rows=await sql`update demo_usage_operation set status='uncertain',attempted_at=clock_timestamp()
       where id=${prepared.id} and status='reserved' returning id`;
     return rows.length===1;
@@ -121,19 +124,20 @@ export async function realDemoSend(actor:AdminActor, command:Send, provider:Demo
     const result=await provider.execute(prepared.messages,quote);
     await db`update demo_usage_operation set provider_request_id=${result.id},response_text=${result.text},
       evidence=${db.typed(JSON.stringify({quote,usage:result.usage,model:result.model}),25)}::jsonb where id=${prepared.id}`;
-    if(result.cost!==null)await settleDemoOperation(actor,command.spaceId,prepared.id,result.cost,result.usage);
+    if(result.cost!==null && (!web || result.model===quote.model))await settleDemoOperation(actor,command.spaceId,prepared.id,result.cost,result.usage,false,web);
   }catch{ /* Resultado incierto: conservar reserva, sin repetir POST ni imprimir contenido. */ }
   const [state]=await db`select status from demo_usage_operation where id=${prepared.id}`;
   return {id:command.sessionId,operationId:prepared.id,status:state!.status};
 }
 
-export async function settleDemoOperation(actor:AdminActor,spaceId:string,id:string,cost:string,usage:unknown,external=false) {
+export async function settleDemoOperation(actor:AdminActor,spaceId:string,id:string,cost:string,usage:unknown,external=false,web=false) {
   const actual=microCeil(dollars(cost));
+  const kind=external?"external":web?"web":"internal";
   return getSql().begin(async sql=>{
     await sql`select id from organization where id=${actor.organizationId} for update`;
     const [op]=await sql`select o.*,s.state,s.expires_at,s.idle_deadline from demo_usage_operation o
       join demo_session s on s.id=o.session_id where o.id=${id} and o.organization_id=${actor.organizationId}
-        and o.space_id=${spaceId} and ((${external} and s.kind='external') or (not ${external} and s.actor_user_id=${actor.userId})) for update of o,s`;
+        and o.space_id=${spaceId} and s.kind=${kind} and (${external} or s.actor_user_id=${actor.userId}) for update of o,s`;
     if(!op)throw new SimulatorError("not_found",404);
     if(op.status==="settled")return;
     if(op.status!=="uncertain")throw new SimulatorError("operation_state");
@@ -157,10 +161,12 @@ export async function settleDemoOperation(actor:AdminActor,spaceId:string,id:str
       values(${key},${actor.organizationId},${spaceId},${actor.userId},'llm_settled',${id},'provider_evidence',${key},'success')`;
   });
 }
-export async function reconcileDemoOperation(actor:AdminActor,spaceId:string,id:string,provider:DemoProvider,external=false){
+export async function reconcileDemoOperation(actor:AdminActor,spaceId:string,id:string,provider:DemoProvider,external=false,web=false){
   const sql=getSql();
+  const kind=external?"external":web?"web":"internal";
   const [op]=await sql`select o.* from demo_usage_operation o join demo_session s on s.id=o.session_id
-    where o.id=${id} and o.organization_id=${actor.organizationId} and o.space_id=${spaceId} and ((${external} and s.kind='external') or (not ${external} and s.actor_user_id=${actor.userId}))`;
+    where o.id=${id} and o.organization_id=${actor.organizationId} and o.space_id=${spaceId} and s.kind=${kind}
+      and (${external} or s.actor_user_id=${actor.userId})`;
   if(!op)throw new SimulatorError("not_found",404);
   if(op.status==="reserved" && !op.attempted_at){
     await sql.begin(async tx=>{
@@ -177,7 +183,7 @@ export async function reconcileDemoOperation(actor:AdminActor,spaceId:string,id:
   if(op.status!=="uncertain")return {id:op.session_id,status:op.status};
   if(!op.provider_request_id)throw new SimulatorError("generation_id_missing");
   const evidence=await provider.reconcile(op.provider_request_id);
-  await settleDemoOperation(actor,spaceId,id,evidence.cost,evidence.usage,external);
+  await settleDemoOperation(actor,spaceId,id,evidence.cost,evidence.usage,external,web);
   const [final]=await sql`select status from demo_usage_operation where id=${id}`;
   return {id:op.session_id,status:final!.status};
 }

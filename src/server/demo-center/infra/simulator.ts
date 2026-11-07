@@ -39,7 +39,11 @@ export async function simulatorRead(actor: AdminActor, spaceId: string, sessionI
   return { session, turns, operations, budgets };
 }
 
-export async function simulatorCommand(actor: AdminActor, command: SimulatorCommand) {
+export async function simulatorCommand(actor: AdminActor, command: SimulatorCommand, web?: { tokenHash?: string }) {
+  if (web && (command.action === "send" || (command.action === "start" && !web.tokenHash))) {
+    throw new SimulatorError("invalid", 422);
+  }
+  const kind = web ? "web" : "internal";
   const db = getSql();
   return db.begin(async sql => {
     const org = actor.organizationId;
@@ -49,7 +53,7 @@ export async function simulatorCommand(actor: AdminActor, command: SimulatorComm
     if (!space) throw new SimulatorError("not_found", 404);
     if (command.action === "start") {
       const [prior] = await sql`select * from demo_session where organization_id=${org}
-        and actor_user_id=${actor.userId} and request_key=${command.requestKey}`;
+        and kind=${kind} and actor_user_id=${actor.userId} and request_key=${command.requestKey}`;
       if (prior) {
         if (prior.space_id !== command.spaceId) throw new SimulatorError("request_conflict");
         return { id: prior.id };
@@ -57,19 +61,19 @@ export async function simulatorCommand(actor: AdminActor, command: SimulatorComm
     }
     const [session] = command.action !== "start" ? await sql`select * from demo_session
       where id=${command.sessionId} and organization_id=${org} and space_id=${command.spaceId}
-        and kind='internal' and actor_user_id=${actor.userId} for update` : [];
+        and kind=${kind} and actor_user_id=${actor.userId} for update` : [];
     if (command.action !== "start" && !session) throw new SimulatorError("not_found", 404);
     async function audit(type: string, id: string) {
       const key = randomUUID();
       await sql`insert into demo_session_event(id,organization_id,space_id,session_id,type,actor,reason_code)
-        values(${randomUUID()},${org},${command.spaceId},${id},${type},${actor.userId},'internal_simulation')`;
+        values(${randomUUID()},${org},${command.spaceId},${id},${type},${web ? "prospect_invitation" : actor.userId},${web ? "web_demo" : "internal_simulation"})`;
       await sql`insert into demo_admin_audit(id,organization_id,space_id,actor_user_id,action,target_id,reason_code,request_id,result)
-        values(${key},${org},${command.spaceId},${actor.userId},${type},${id},'internal_simulation',${key},'success')`;
+        values(${key},${org},${command.spaceId},${actor.userId},${type},${id},${web ? "web_demo" : "internal_simulation"},${key},'success')`;
     }
     if (command.action === "close") {
       if (session!.state === "active") {
         await sql`update demo_session set state='closed',ended_at=clock_timestamp() where id=${session!.id}`;
-        await audit("simulation_closed", String(session!.id));
+        await audit(web ? "web_demo_closed" : "simulation_closed", String(session!.id));
       }
       return { id: session!.id };
     }
@@ -111,15 +115,20 @@ export async function simulatorCommand(actor: AdminActor, command: SimulatorComm
       }
     }
     if (command.action === "start") {
+      if (web && (!policies.every(p => BigInt(p.budget_micro_usd) > 0n) ||
+          !policies.some(p => p.session_budget_micro_usd != null) ||
+          policies.some(p => p.session_budget_micro_usd != null && BigInt(p.session_budget_micro_usd) <= 0n))) {
+        throw new SimulatorError("session_budget_required");
+      }
       const id = randomUUID();
       const duration = Math.min(...policies.map(p => Number(p.max_duration_seconds)));
       const idle = Math.min(...policies.map(p => Number(p.max_idle_seconds)));
       const snapshot = sql.typed(JSON.stringify(Array.from(policies)), 25);
-      await sql`insert into demo_session(id,organization_id,space_id,kind,actor_user_id,request_key,profile_version_id,
+      await sql`insert into demo_session(id,organization_id,space_id,kind,actor_user_id,request_key,web_token_hash,profile_version_id,
         route_generation,state,started_at,expires_at,last_activity_at,idle_deadline,limits_snapshot)
-        values(${id},${org},${command.spaceId},'internal',${actor.userId},${command.requestKey},${space.current_profile_version_id},
+        values(${id},${org},${command.spaceId},${kind},${actor.userId},${command.requestKey},${web?.tokenHash ?? null},${space.current_profile_version_id},
         ${space.generation},'active',clock_timestamp(),clock_timestamp()+${duration}*interval '1 second',clock_timestamp(),clock_timestamp()+${idle}*interval '1 second',${snapshot}::jsonb)`;
-      await audit("simulation_started", id);
+      await audit(web ? "web_demo_invited" : "simulation_started", id);
       return { id };
     }
     const history = await sql`select user_text,assistant_text from demo_simulation_turn

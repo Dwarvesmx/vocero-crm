@@ -1,0 +1,72 @@
+name: WA03E isolated recovery
+on:
+  push:
+    branches: [wa03e-verificacion-aislada]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      pg:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: synthetic_password
+          POSTGRES_USER: demo
+          POSTGRES_DB: vocero_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U demo -d vocero_test"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    steps:
+      - name: Test images on disposable PostgreSQL
+        env:
+          PG_ID: ${{ job.services.pg.id }}
+        run: |
+          set -euo pipefail
+          sql() { docker exec -i "$PG_ID" psql -v ON_ERROR_STOP=1 -U demo -d vocero_test "$@"; }
+          start() {
+            docker run -d --name crmtest --add-host=host.docker.internal:host-gateway -p 127.0.0.1:3033:3000 \
+              -e DATABASE_URL=postgres://demo:synthetic_password@host.docker.internal:5432/vocero_test \
+              -e APP_BASE_URL=http://localhost:3033 -e BETTER_AUTH_SECRET=synthetic-only-long-enough-secret-123 \
+              -e ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= -e META_WEBHOOK_VERIFY_TOKEN=synthetic \
+              "$1" > /dev/null
+          }
+          healthy() {
+            for n in $(seq 1 90); do
+              if curl -fsS http://127.0.0.1:3033/api/health > /tmp/health.json; then cat /tmp/health.json; return 0; fi
+              if [ "$(docker inspect -f '{{.State.Running}}' crmtest)" != true ]; then docker logs crmtest; return 1; fi
+              sleep 2
+            done
+            docker logs crmtest; return 1
+          }
+          stop() { docker rm -f crmtest >/dev/null; }
+          start ghcr.io/dwarvesmx/vocero-crm@sha256:b520d2625aa39218824b26dc85c992972d1e8e092f5a1424e44eaef310c6e6b2
+          healthy
+          stop
+          sql <<'SQL'
+          insert into organization(id,name) values('recovery-org','Synthetic');
+          insert into contact(id,organization_id,wa_identity,phone,name) values('recovery-contact','recovery-org','525500000001','525500000001','Synthetic');
+          insert into conversation(id,organization_id,contact_id) values('recovery-conv','recovery-org','recovery-contact');
+          insert into dispatch(id,organization_id,conversation_id,status,first_message_at,last_message_at) select 'historical-'||n,'recovery-org','recovery-conv','entregado',now(),now() from generate_series(1,46) n;
+          SQL
+          start ghcr.io/dwarvesmx/vocero-crm@sha256:9bfe33bdd43e435abd85d0474c6fb29d834b339ec36afa1080a460c142d69a78
+          healthy
+          stop
+          test "$(sql -Atc "select count(*) from dispatch where id like 'historical-%' and status='entregado'")" = 46
+          start ghcr.io/dwarvesmx/vocero-crm@sha256:82dc40663f163dbbaae1e92176ce87b523c5e97a586152bd1de5286c4644dab0
+          healthy
+          stop
+          sql -c "insert into demo_space(id,organization_id,name,commercial_name,sector,status) values('recovery-space','recovery-org','Synthetic','Synthetic','Ficticio','active')"
+          start ghcr.io/dwarvesmx/vocero-crm@sha256:82dc40663f163dbbaae1e92176ce87b523c5e97a586152bd1de5286c4644dab0
+          blocked=false
+          for n in $(seq 1 65); do
+            if [ "$(docker inspect -f '{{.State.Running}}' crmtest)" = false ]; then blocked=true; break; fi
+            sleep 2
+          done
+          docker logs crmtest
+          test "$blocked" = true
+          test "$(docker inspect -f '{{.State.ExitCode}}' crmtest)" != 0
+          stop
+          echo 'PASS: images and migration, 46 rows, recovery start and fail-closed demo'

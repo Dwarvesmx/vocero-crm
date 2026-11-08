@@ -28,6 +28,23 @@ for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     connection: { TimeZone: "UTC" },
   });
   try {
+    // Esta imagen de recuperación solo admite el esquema posterior a 0041
+    // antes de cargar datos demo. El código anterior no los aísla al leer.
+    const [guard] = await sql`
+      SELECT
+        EXISTS (SELECT 1 FROM drizzle.__drizzle_migrations
+          WHERE hash = '9d1127cf7a34f27e67c3477c561c7b517b09aee564d19eb1c37d7a68c97dddc3'
+            AND created_at = 1794036323218)
+          AND NOT EXISTS (SELECT 1 FROM drizzle.__drizzle_migrations WHERE created_at > 1794036323218)
+          AND NOT EXISTS (SELECT 1 FROM public.demo_space)
+          AND NOT EXISTS (SELECT 1 FROM public.demo_identity_route)
+          AND NOT EXISTS (SELECT 1 FROM public.dispatch WHERE scope_kind <> 'commercial')
+          AND NOT EXISTS (SELECT 1 FROM public.message WHERE scope_kind <> 'commercial')
+        AS can_start
+    `;
+    if (guard?.can_start !== true) {
+      throw new Error("La recuperación requiere 0041 y ausencia de datos demo");
+    }
     await migrate(drizzle(sql), { migrationsFolder });
     console.log("[migrate] migraciones aplicadas");
     await sql.end();

@@ -2,6 +2,33 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
+import { qrPath } from "./portal-qr";
+
+type Catalogo = { number: string; demos: { name: string; assistant: string }[] };
+
+function AccesoWhatsApp({ url, demo }: { url: string; demo?: string }) {
+  const link = new URL(url);
+  const number = link.pathname.slice(1);
+  const web = new URL("https://web.whatsapp.com/send");
+  web.searchParams.set("phone", number);
+  const text = link.searchParams.get("text");
+  if (text) web.searchParams.set("text", text);
+  const qr = new TextEncoder().encode(url).length <= 134 ? url : "https://wa.me/" + number;
+  return <div className="space-y-2">
+    <p className="text-sm">{demo ? <>Envía «Quiero una demo de {demo}» y sigue las indicaciones de Lukas.</>
+      : "Envía el mensaje ya preparado desde tu teléfono. Después vuelve aquí y consulta la vinculación."}</p>
+    <a className={boton + " inline-block"} href={url} target="_blank" rel="noreferrer">Abrir WhatsApp</a>
+    <div className="hidden items-center gap-3 sm:flex">
+      <svg viewBox="0 0 49 49" className="size-28 flex-none bg-white" role="img" aria-label="QR para abrir WhatsApp" shapeRendering="crispEdges">
+        <path d={qrPath(qr)} fill="#000" />
+      </svg>
+      <div className="text-sm">Escanea con el celular o abre <a href={web.href} target="_blank" rel="noreferrer" className="font-semibold underline">WhatsApp Web</a>.
+        <br />Número receptor: <span className="whitespace-nowrap font-semibold">+{number}</span>
+      </div>
+    </div>
+  </div>;
+}
+
 type Demo = {
   name: string;
   assistant: string;
@@ -47,7 +74,7 @@ function leerCodigos(value: string) {
   return [...new Set(codigos.filter(token => /^[\w-]{43}$/.test(token)))].slice(0, 6);
 }
 
-export function PortalDemo({ contacto }: { contacto: string | null }) {
+export function PortalDemo({ contacto, catalogo }: { contacto: string | null; catalogo?: Catalogo | null }) {
   const [demos, setDemos] = useState<{ token: string; data: Demo }[]>([]);
   const [seleccion, setSeleccion] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -104,8 +131,17 @@ export function PortalDemo({ contacto }: { contacto: string | null }) {
         <h1 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight sm:text-5xl">Prueba Vocero en acción</h1>
         <p className="mt-4 max-w-xl text-teal-50">ModoNext combina CRM, atención por WhatsApp y automatización con IA. En esta demo web puedes conversar con un asistente de un negocio de ejemplo y probar cómo mantiene el contexto de tus preguntas.</p>
       </section>
+      {catalogo && <section className="mt-7" aria-labelledby="whatsapp-demos">
+        <h2 id="whatsapp-demos" className="text-xl font-bold">Demostraciones por WhatsApp</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {catalogo.demos.map(demo => <article key={demo.name} className="space-y-3 rounded-2xl border border-slate-300 bg-white p-4">
+            <h3 className="text-lg font-semibold">{demo.name} · {demo.assistant}</h3>
+            <AccesoWhatsApp demo={demo.name} url={`https://wa.me/${catalogo.number}?text=${encodeURIComponent("Quiero una demo de " + demo.name)}`} />
+          </article>)}
+        </div>
+      </section>}
       <section className="mt-7" aria-labelledby="disponibles">
-        <h2 id="disponibles" className="text-xl font-bold">Tus demostraciones</h2>
+        <h2 id="disponibles" className="text-xl font-bold">Chat web e invitaciones privadas</h2>
         {error && <p role="alert" className="mt-2 text-red-800">{error}</p>}
         {cargando && <p role="status" className="mt-2">Comprobando acceso…</p>}
         {demos.length > 0 && <ul className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -246,16 +282,15 @@ function CanalWhatsApp({ token, status, webActiva, actualizar, contacto }: {
     <p role="status">{estadosWhatsApp[status.state] ?? "No disponible"}</p>
     {status.expiresAt && <p className="text-sm">Vence <time dateTime={status.expiresAt}>{new Date(status.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></p>}
     {webActiva && ["available", "pending", "expired"].includes(status.state) && <>
-      <button type="button" className={secundario} aria-expanded={abierto} onClick={() => setAbierto(!abierto)}>Probar por WhatsApp</button>
+      <button type="button" className={secundario} aria-expanded={abierto} onClick={() => setAbierto(!abierto)}>Vincular desde una invitación</button>
       {abierto && <form className="space-y-2" onSubmit={e => { e.preventDefault(); void operar("start"); }}>
         <label htmlFor={id + "-tel"} className="block text-sm">Tu número de WhatsApp con código de país</label>
         <input id={id + "-tel"} type="tel" autoComplete="tel" value={telefono} onChange={e => setTelefono(e.target.value)}
           maxLength={16} minLength={7} required className="w-full rounded-xl border border-slate-400 bg-white px-3 py-2 sm:w-auto" />
-        <button className={boton + " ml-0 sm:ml-2"} disabled={ocupado}>Preparar acceso</button>
+        <button className={boton + " ml-0 sm:ml-2"} disabled={ocupado}>Preparar mensaje de vinculación</button>
       </form>}
     </>}
-    {enlace && status.state === "pending" && <p><a className="font-bold underline" href={enlace.url} target="_blank" rel="noreferrer">Abrir WhatsApp</a>
-      {" y enviar el código desde el número indicado. Luego vuelve aquí y consulta el estado."}</p>}
+    {enlace && status.state === "pending" && <AccesoWhatsApp url={enlace.url} />}
     {vinculado && <p>Ya puedes enviar una pregunta desde el mismo chat de WhatsApp. Estás probando un asistente de demostración.</p>}
     <div className="flex flex-wrap gap-2">
       {(status.state === "pending" || vinculado) && <button type="button" className={secundario} disabled={ocupado}

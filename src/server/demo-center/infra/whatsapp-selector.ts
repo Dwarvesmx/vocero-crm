@@ -8,6 +8,8 @@ import { permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/serv
 import { codigoDemoWhatsApp, posteriorAlCorte, telefonoWhatsApp } from "../domain/whatsapp";
 import { externalIdentityLookup, iniciarSesionWhatsApp } from "./external-session";
 import { bloquearRutaWhatsApp, canalDemoWhatsApp, hashCodigo, invalidarPendientesWhatsApp } from "./whatsapp-link";
+import { canalConversacional, consentimientoDemo, finDemo, ofertaAceptada } from "./whatsapp-offer";
+import { encolarAvisoDemo } from "./whatsapp-notice";
 import { SimulatorError } from "./simulator";
 
 function identidad(org: string, cuenta: string, evento: EventoWhatsAppZernio) {
@@ -28,20 +30,21 @@ async function vinculos(sql: TransactionSql, org: string, cuenta: string, hilo: 
     order by l.linked_at desc`;
 }
 
-async function asignar(sql: TransactionSql, org: string, cuenta: string, evento: EventoWhatsAppZernio, codigo: string,
-  persona: ReturnType<typeof identidad>, ahora: Date) {
-  if (!canalDemoWhatsApp() || !permiteDespachoWhatsAppZernio(evento) || !persona.phone || !persona.lookup || !codigo) return;
+async function asignar(sql: TransactionSql, org: string, cuenta: string, evento: EventoWhatsAppZernio, challengeHash: string,
+  persona: ReturnType<typeof identidad>, ahora: Date, oferta?: { metadata: Row }) {
+  if (!canalDemoWhatsApp() || !permiteDespachoWhatsAppZernio(evento) || !persona.phone || !persona.lookup || !challengeHash) return;
   const hilo = evento.conversation.id;
-  const [link] = await sql`select l.*,s.actor_user_id,s.expires_at as web_expiry,p.current_profile_version_id
+  const [link] = await sql`select l.*,s.actor_user_id,s.expires_at as web_expiry,s.profile_version_id,p.current_profile_version_id
     from demo_whatsapp_link l join demo_session s on (s.organization_id,s.space_id,s.id)=(l.organization_id,l.space_id,l.web_session_id)
     join demo_space p on (p.organization_id,p.id)=(l.organization_id,l.space_id)
-    where l.organization_id=${org} and l.account_ref=${cuenta} and l.challenge_hash=${hashCodigo(codigo)}
+    where l.organization_id=${org} and l.account_ref=${cuenta} and l.challenge_hash=${challengeHash}
       and l.phone_lookup=${persona.lookup} and l.external_session_id is null and l.expires_at>clock_timestamp()
       and s.kind='web' and s.state='active' and least(s.expires_at,s.idle_deadline)>clock_timestamp()
       and p.status='active' and p.current_profile_version_id is not null for update of l,s,p`;
   // El sello está redondeado a segundos. Durante el segundo de emisión basta la prueba aleatoria.
   if (!link || Date.parse(evento.message.sentAt) < Math.floor(+new Date(link.created_at) / 1000) * 1000 ||
       Date.parse(evento.message.sentAt) > +ahora) return;
+  if (oferta && link.profile_version_id !== link.current_profile_version_id) throw new SimulatorError("profile_changed");
   const anteriores = await vinculos(sql, org, cuenta, hilo, persona.lookup, persona.alias);
   if (anteriores.some(l => l.phone_lookup !== persona.lookup || l.thread_ref !== hilo ||
       (l.bsuid_lookup && persona.alias && l.bsuid_lookup !== persona.alias))) return;
@@ -62,15 +65,17 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   const [pendiente] = await sql`select 1 from dispatch where organization_id=${org} and conversation_id=${conv.id}
     and scope_kind='commercial' and status in ('pendiente','en_vuelo')
     union all select 1 from zernio_whatsapp_outbox where organization_id=${org} and conversation_id=${conv.id}
-    and status in ('iniciado','incierto')
+    and status in ('pendiente','procesando','retenido','iniciado','incierto')
     union all select 1 from webhook_event where organization_id=${org} and fuente='zernio_whatsapp'
     and payload->'conversation'->>'id'=${hilo} and payload->>'event'='message.received'
     and status in ('pendiente','en_proceso') limit 1`;
+  if (oferta && oferta.metadata.conversation !== conv.id) throw new SimulatorError("identity_conflict");
   if (pendiente) throw new SimulatorError("thread_busy");
   await sql`update conversation set channel_thread_ref=${hilo} where id=${conv.id} and channel_thread_ref is null`;
 
   const [ruta] = await sql`select * from demo_identity_route where organization_id=${org} and channel='whatsapp'
     and identity_lookup=${persona.lookup} for update`;
+  if (oferta && ruta && ruta.mode !== "commercial") throw new SimulatorError("thread_unavailable");
   if (ruta?.session_id) {
     await sql`update demo_session set state='superseded',ended_at=clock_timestamp()
       where organization_id=${org} and id=${ruta.session_id} and state='active'`;
@@ -78,10 +83,14 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   }
   const phoneHash = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
     .update(JSON.stringify(["demo-phone:v1", org, persona.phone])).digest("hex");
-  const [existente] = await sql`select * from demo_authorization where organization_id=${org} and space_id=${link.space_id}
+  let [existente] = await sql`select * from demo_authorization where organization_id=${org} and space_id=${link.space_id}
     and channel='whatsapp' and phone_lookup=${phoneHash} and state='active' for update`;
   // Una autorización revocada por el operador no se usa. Una invitación nueva es una autorización explícita distinta.
-  if (existente?.expires_at && +new Date(existente.expires_at) <= +ahora) throw new SimulatorError("authorization_expired");
+  if (existente?.expires_at && +new Date(existente.expires_at) <= +ahora) {
+    if (!oferta) throw new SimulatorError("authorization_expired");
+    await sql`update demo_authorization set state='revoked',version=version+1 where organization_id=${org} and id=${existente.id}`;
+    existente = undefined;
+  }
   const autorizacion = String(existente?.id ?? randomUUID());
   if (!existente) await sql`insert into demo_authorization(id,organization_id,space_id,canonical_phone,phone_lookup,phone_suffix,created_by,expires_at)
     values(${autorizacion},${org},${link.space_id},${sql.typed(JSON.stringify(encryptSecret(persona.phone)),25)}::jsonb,${phoneHash},
@@ -91,9 +100,10 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   await sql`insert into demo_identity_binding(id,organization_id,space_id,channel,account_ref,identity_kind,identity_lookup,authorization_id,
     state,evidence_type,evidence_ref,verified_by,verified_at,expires_at)
     values(${randomUUID()},${org},${link.space_id},'whatsapp',${cuenta},'phone',${persona.lookup},${autorizacion},
-      'verified','signed_whatsapp_challenge',${evento.id},${link.actor_user_id},clock_timestamp(),${link.web_expiry})`;
+      'verified',${oferta ? "signed_whatsapp_consent" : "signed_whatsapp_challenge"},${evento.id},${link.actor_user_id},clock_timestamp(),${link.web_expiry})`;
   const politicas = await sql`select * from demo_limits where organization_id=${org} and (space_id is null or space_id=${link.space_id})
     order by space_id nulls first for update`;
+  if (oferta) await sql`update demo_session set state='closed',ended_at=clock_timestamp() where id=${link.web_session_id}`;
   const sesion = await iniciarSesionWhatsApp(sql, org, {
     contractVersion: 1, organizationId: org, conversationId: conv.id, accountRef: cuenta,
     channel: "whatsapp", identity: { kind: "phone", value: persona.phone }, requestKey: "wa-link:" + link.id,
@@ -102,6 +112,7 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   await sql`update demo_whatsapp_link set external_session_id=${String(sesion.sessionId)},thread_ref=${hilo},
     bsuid_lookup=${persona.alias ?? anteriores.find(l => l.bsuid_lookup)?.bsuid_lookup ?? null},
     linked_at=clock_timestamp() where id=${link.id}`;
+  if (oferta) await encolarAvisoDemo(sql, org, String(sesion.sessionId), cuenta, hilo, "started", evento.message.sentAt);
   return "linked";
 }
 
@@ -123,9 +134,16 @@ async function encolar(sql: TransactionSql, org: string, evento: EventoWhatsAppZ
 async function seleccionar(sql: TransactionSql, org: string, cuenta: string, evento: EventoWhatsAppZernio, ahora: Date) {
   const persona = identidad(org, cuenta, evento);
   const codigo = codigoDemoWhatsApp(evento.message.text);
-  if (codigo !== null) {
+  const consentimiento = canalConversacional() && consentimientoDemo(evento.message.text);
+  if (codigo !== null || consentimiento) {
     try {
-      return await sql.savepoint(tx => asignar(tx, org, cuenta, evento, codigo, persona, ahora)) ?? "challenge_unverified";
+      return await sql.savepoint(async tx => {
+        if (consentimiento && persona.lookup && permiteDespachoWhatsAppZernio(evento)) {
+          const oferta = await ofertaAceptada(tx, org, cuenta, evento, persona.lookup, persona.alias, ahora);
+          if (oferta) return asignar(tx, org, cuenta, evento, oferta.challenge_hash, persona, ahora, { metadata: oferta.metadata });
+        }
+        if (codigo) return asignar(tx, org, cuenta, evento, hashCodigo(codigo), persona, ahora);
+      }) ?? (consentimiento ? "consent_unverified" : "challenge_unverified");
     } catch (e) {
       if (!(e instanceof SimulatorError)) throw e;
       return e.code;
@@ -163,7 +181,12 @@ async function seleccionar(sql: TransactionSql, org: string, cuenta: string, eve
   const vigente = s && s.state === "active" && s.auth_state === "active" && s.space_state === "active" &&
     [s.expires_at,s.idle_deadline,s.binding_expiry,s.auth_expiry].every(d => !d || +new Date(d) > +ahora);
   if (!vigente || !canalDemoWhatsApp()) {
-    await bloquearRutaWhatsApp(sql, org, link.phone_lookup, r.session_id, "revoked", "authorization_or_channel_unavailable");
+    const expired = s?.state === "active" && [s.expires_at, s.idle_deadline].some(d => +new Date(d) <= +ahora);
+    await bloquearRutaWhatsApp(sql, org, link.phone_lookup, r.session_id, expired ? "expired" : "revoked",
+      expired ? "session_deadline" : "authorization_or_channel_unavailable");
+    if (expired && canalConversacional() && permiteDespachoWhatsAppZernio(evento) && posteriorAlCorte(evento.message.sentAt, new Date(s.linked_at), ahora)) {
+      await encolarAvisoDemo(sql, org, s.id, cuenta, hilo, "ended", evento.message.sentAt);
+    }
     await encolar(sql, org, evento, link.conversation_id);
     return "blocked";
   }
@@ -172,9 +195,14 @@ async function seleccionar(sql: TransactionSql, org: string, cuenta: string, eve
     await encolar(sql, org, evento, link.conversation_id);
     return "blocked";
   }
+  if (canalConversacional() && finDemo(evento.message.text)) {
+    await bloquearRutaWhatsApp(sql, org, link.phone_lookup, s.id, "closed", "prospect_finished");
+    await encolarAvisoDemo(sql, org, s.id, cuenta, hilo, "ended", evento.message.sentAt);
+    return "demo_finished";
+  }
   const politicas = await sql`select * from demo_limits where organization_id=${org} and (space_id is null or space_id=${s.space_id})`;
   const snapshot = s.limits_snapshot as Row[];
-  const [total] = await sql`select count(*)::int as n,max(wa_timestamp) as ultimo from message
+  const [total] = await sql`select count(*)::int as n,max(wa_timestamp) at time zone 'UTC' as ultimo from message
     where organization_id=${org} and demo_session_id=${s.id} and direction='in'`;
   let permitido = politicas.length === 2 && snapshot.every(p => total!.n < p.max_inbound_messages) &&
     (!total!.ultimo || +new Date(total!.ultimo) <= Date.parse(evento.message.sentAt));
@@ -184,6 +212,10 @@ async function seleccionar(sql: TransactionSql, org: string, cuenta: string, eve
         and (${p.space_id}::text is null or ds.space_id=${p.space_id})
         and m.created_at>=${p.window_start}::timestamptz and m.created_at<${p.window_end}::timestamptz`;
     permitido &&= p.enabled && +new Date(p.window_start) <= +ahora && +new Date(p.window_end) > +ahora && usados!.n < p.max_inbound_messages;
+  }
+  if (canalConversacional() && !permitido && (!total!.ultimo || +new Date(total!.ultimo) <= Date.parse(evento.message.sentAt))) {
+    await bloquearRutaWhatsApp(sql, org, link.phone_lookup, s.id, "closed", "inbound_quota");
+    await encolarAvisoDemo(sql, org, s.id, cuenta, hilo, "ended", evento.message.sentAt);
   }
   await encolar(sql, org, evento, link.conversation_id, permitido ? s : undefined);
   return permitido ? "demo" : "quota_exceeded";

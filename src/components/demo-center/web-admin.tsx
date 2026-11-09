@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 
 type Sesion = { id: string; state: string; expires_at: string; idle_deadline: string; turns: number; cost: string; held: string; pending: string | null;
   whatsapp?: { state: string; mode: string; generation: number; reviewDueAt?: string; turns: number; cost: string; pending: number;
-    financialPending?: string; deliveryPending?: string; dispatchErrors: number } };
+    financialPending?: string; deliveryPending?: string; noticePending?: string; dispatchErrors: number } };
 type Estado = { enabled: boolean; sessions: Sesion[] };
 const avisos: Record<string, string> = {
+  invalid_phone: "Escribe el teléfono con código de país y sin espacios.",
+  whatsapp_unavailable: "WhatsApp no está disponible. Puedes crear una invitación web sin teléfono.",
   real_not_enabled: "Habilita la IA real para emitir una invitación.",
   openrouter_required: "Configura OpenRouter para esta organización en Ajustes → IA.",
   policy_required: "Configura límites globales y del espacio con ventanas vigentes.",
@@ -32,9 +34,12 @@ async function leer(spaceId: string): Promise<Estado> {
 export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
   const [estado, setEstado] = useState<Estado>();
   const [enlace, setEnlace] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [enlaceWhatsApp, setEnlaceWhatsApp] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
+  const [confirmar, setConfirmar] = useState<{ id: string; action: "revoke" | "restoreWhatsApp" }>();
 
   useEffect(() => {
     let cancelado = false;
@@ -44,6 +49,7 @@ export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
   }, [spaceId]);
 
   async function operar(accion: Record<string, string | number>) {
+    setConfirmar(undefined);
     setError("");
     setAviso("");
     setOcupado(true);
@@ -53,15 +59,19 @@ export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(avisos[data.error] ?? "No se pudo completar la operación.");
-      if (accion.action === "invite") setEnlace(`${window.location.origin}/demos#acceso=${data.token}`);
-      if (accion.action === "revoke") setEnlace("");
-      if (accion.action === "reconcile" || accion.action === "reconcileWhatsApp") {
+      if (accion.action === "invite") {
+        setEnlace(`${window.location.origin}/demos#acceso=${data.token}`);
+        setEnlaceWhatsApp(data.whatsapp?.url ?? "");
+        setTelefono("");
+      }
+      if (accion.action === "revoke") { setEnlace(""); setEnlaceWhatsApp(""); }
+      if (accion.action === "reconcile" || accion.action === "reconcileWhatsApp" || accion.action === "reconcileNotice") {
         const resultado: Record<string,string> = { settled: "Costo confirmado.", released: "Reserva liberada sin llamada al proveedor.",
           delivered: "Entrega confirmada.", accepted: "Envío aceptado por el proveedor.", failed: "El proveedor confirmó un fallo." };
         setAviso(resultado[data.status] ?? "La operación sigue pendiente de revisión.");
       }
       setEstado(await leer(spaceId));
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError((e as Error).message || "No se pudo confirmar la operación. Actualiza el estado antes de reintentar."); }
     finally { setOcupado(false); }
   }
 
@@ -71,8 +81,14 @@ export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
       <p className="text-sm text-muted-foreground">Cada enlace da acceso a una sola sesión del espacio y caduca según sus límites desde la emisión. Compártelo en privado.</p>
     </div>
     {estado?.enabled === false && <p role="status" className="text-sm">El portal web está deshabilitado en este entorno.</p>}
+    {estado?.enabled && <label className="block text-sm">
+      Teléfono del participante (opcional)
+      <input value={telefono} onChange={e => setTelefono(e.target.value)} type="tel" autoComplete="off"
+        maxLength={16} disabled={ocupado} placeholder="+52…" className="mt-1 block rounded-lg border p-2" />
+      <span className="mt-1 block text-muted-foreground">Con teléfono, se prepara un enlace de WhatsApp. La sesión empieza cuando el participante envía el mensaje desde ese número.</span>
+    </label>}
     <div className="flex flex-wrap gap-2">
-      <button className={boton} type="button" disabled={!estado?.enabled || ocupado} onClick={() => void operar({ action: "invite" })}>Crear invitación</button>
+      <button className={boton} type="button" disabled={!estado?.enabled || ocupado} onClick={() => void operar({ action: "invite", ...(telefono.trim() && { phone: telefono.trim() }) })}>{telefono.trim() ? "Preparar WhatsApp" : "Crear invitación web"}</button>
       <button className={boton} type="button" disabled={ocupado} onClick={async () => {
         setOcupado(true);
         setError("");
@@ -83,6 +99,9 @@ export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
     </div>
     {enlace && <label className="block text-sm">Enlace de invitación. Cópialo antes de salir.
       <input readOnly value={enlace} onFocus={e => e.target.select()} className="mt-1 w-full rounded-lg border p-2" />
+    </label>}
+    {enlaceWhatsApp && <label className="block text-sm">Enlace privado de WhatsApp para el participante
+      <input readOnly value={enlaceWhatsApp} onFocus={e => e.target.select()} className="mt-1 w-full rounded-lg border p-2" />
     </label>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     {aviso && <p role="status" className="text-sm">{aviso}</p>}
@@ -96,16 +115,25 @@ export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
           {s.whatsapp.dispatchErrors > 0 ? ` · ${s.whatsapp.dispatchErrors} despachos detenidos` : ""}
           {s.whatsapp.reviewDueAt ? " · Revisar antes de " + new Date(s.whatsapp.reviewDueAt).toLocaleString() : ""}</p>}
         <div className="flex flex-wrap gap-2">
-          {["active", "suspended"].includes(s.state) && <button type="button" className={boton} disabled={ocupado}
-            onClick={() => { if (window.confirm("¿Revocar este acceso?")) void operar({ action: "revoke", sessionId: s.id }); }}>Revocar</button>}
+          {(["active", "suspended"].includes(s.state) || s.whatsapp?.state === "active") && <button type="button" className={boton} disabled={ocupado}
+            onClick={() => setConfirmar({ id: s.id, action: "revoke" })}>{s.whatsapp?.state === "active" ? "Finalizar y revocar WhatsApp" : "Revocar"}</button>}
           {s.pending && <button type="button" className={boton} disabled={ocupado}
             onClick={() => void operar({ action: "reconcile", operationId: s.pending! })}>Conciliar reserva</button>}
           {s.whatsapp?.mode === "blocked" && <button type="button" className={boton} disabled={ocupado}
-            onClick={() => { if (window.confirm("¿Restituir atención comercial? Solo un mensaje nuevo podrá llegar a Lukas.")) {
-              void operar({ action: "restoreWhatsApp", sessionId: s.id, generation: s.whatsapp!.generation });
-            } }}>Restituir atención comercial</button>}
+            onClick={() => setConfirmar({ id: s.id, action: "restoreWhatsApp" })}>Restituir atención comercial</button>}
+          {confirmar?.id === s.id && <div className="w-full space-y-2 rounded-lg border p-3" role="group" aria-label="Confirmar acción">
+            <p>{confirmar.action === "revoke" ? "Se cerrará la sesión activa y WhatsApp quedará en cuarentena."
+              : "Se reanudará la atención comercial solo para mensajes nuevos. Si hay trabajo incierto, seguirá en cuarentena."}</p>
+            <button type="button" autoFocus className={boton} disabled={ocupado} onClick={() => void operar({
+              action: confirmar.action, sessionId: s.id,
+              ...(confirmar.action === "restoreWhatsApp" && { generation: s.whatsapp!.generation }),
+            })}>Confirmar</button>{" "}
+            <button type="button" className={boton} onClick={() => setConfirmar(undefined)}>Cancelar</button>
+          </div>}
           {s.whatsapp?.financialPending && <button type="button" className={boton} disabled={ocupado}
             onClick={() => void operar({ action: "reconcileWhatsApp", kind: "financial", operationId: s.whatsapp!.financialPending! })}>Conciliar costo WhatsApp</button>}
+          {s.whatsapp?.noticePending && <button type="button" className={boton} disabled={ocupado}
+            onClick={() => void operar({ action: "reconcileNotice", noticeId: s.whatsapp!.noticePending! })}>Revisar aviso incierto</button>}
           {s.whatsapp?.deliveryPending && <button type="button" className={boton} disabled={ocupado}
             onClick={() => void operar({ action: "reconcileWhatsApp", kind: "delivery", operationId: s.whatsapp!.deliveryPending! })}>Conciliar salida WhatsApp</button>}
         </div>

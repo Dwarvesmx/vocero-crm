@@ -7,7 +7,7 @@ import { canalDemoWhatsApp } from "./whatsapp-link";
 export async function construirDespachoWhatsAppDemo(fila: FilaDespacho) {
   if (!canalDemoWhatsApp() || fila.messageIds?.length !== 1 || !fila.demoSessionId) return null;
   const [r] = await getSql()`select s.*,org.slug,c.contact_id,t.wa_identity,l.account_ref,l.phone_lookup,
-    m.id as message_id,m.text,m.wa_timestamp
+    m.id as message_id,m.text,m.wa_timestamp at time zone 'UTC' as wa_timestamp
     from demo_session s join organization org on org.id=s.organization_id
     join demo_whatsapp_link l on (l.organization_id,l.external_session_id)=(s.organization_id,s.id)
     join demo_identity_route r on r.organization_id=s.organization_id and r.session_id=s.id and r.mode='demo' and r.generation=s.route_generation

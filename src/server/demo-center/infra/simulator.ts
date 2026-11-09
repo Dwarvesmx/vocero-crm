@@ -39,13 +39,13 @@ export async function simulatorRead(actor: AdminActor, spaceId: string, sessionI
   return { session, turns, operations, budgets };
 }
 
-export async function simulatorCommand(actor: AdminActor, command: SimulatorCommand, web?: { tokenHash?: string }) {
+export async function simulatorCommand(actor: AdminActor, command: SimulatorCommand, web?: { tokenHash?: string }, transaction?: import("postgres").TransactionSql) {
   if (web && (command.action === "send" || (command.action === "start" && !web.tokenHash))) {
     throw new SimulatorError("invalid", 422);
   }
   const kind = web ? "web" : "internal";
   const db = getSql();
-  return db.begin(async sql => {
+  const run = async (sql: import("postgres").TransactionSql) => {
     const org = actor.organizationId;
     // Orden único para inicios, turnos y cierres. No hay HTTP dentro de esta transacción.
     await sql`select id from organization where id=${org} for update`;
@@ -100,7 +100,7 @@ export async function simulatorCommand(actor: AdminActor, command: SimulatorComm
       const scope = policy.space_id;
       const [counts] = await sql`select
         count(*) filter(where state='active' and expires_at>clock_timestamp() and idle_deadline>clock_timestamp())::int as active,
-        count(*) filter(where started_at>=${new Date(policy.window_start).toISOString()} and started_at<${new Date(policy.window_end).toISOString()})::int as started
+        count(*) filter(where not exists(select 1 from demo_session_event e where e.organization_id=demo_session.organization_id and e.session_id=demo_session.id and e.type='whatsapp_demo_offered') and started_at>=${new Date(policy.window_start).toISOString()} and started_at<${new Date(policy.window_end).toISOString()})::int as started
         from demo_session where organization_id=${org} and (${scope}::text is null or space_id=${scope})`;
       if (command.action === "start" && (counts!.active >= policy.max_concurrent_sessions || counts!.started >= policy.max_sessions_started)) {
         throw new SimulatorError("quota_exceeded", 429);
@@ -157,5 +157,6 @@ export async function simulatorCommand(actor: AdminActor, command: SimulatorComm
     await sql`update demo_session set last_activity_at=clock_timestamp(),idle_deadline=least(expires_at,clock_timestamp()+${idle}*interval '1 second') where id=${session!.id}`;
     await audit("simulation_turn",String(session!.id));
     return { id: session!.id };
-  });
+  };
+  return transaction ? run(transaction) : db.begin(run);
 }

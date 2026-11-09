@@ -1,4 +1,5 @@
-import { and, eq, lte, or } from "drizzle-orm";
+import { caducarDemosConversacionales } from "@/server/demo-center/infra/whatsapp-lifecycle";
+import { and, eq, lte, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { MetaApiError } from "@/lib/meta/client";
@@ -42,10 +43,16 @@ export async function encolarEnvioWhatsAppZernio(input: {
   if (previo) return validar(previo);
   const messageId = newId("message");
   try { await db.transaction(async (tx) => {
-    if (input.aiGenerated) {
-      const [conv] = await tx.select().from(schema.conversation).where(and(eq(schema.conversation.id, input.conversationId), eq(schema.conversation.organizationId, input.organizationId))).for("update");
-      if (!conv || !conv.aiEnabled || conv.handoffAt || conv.handoffPendingMessageId) throw new Error("Atención humana pendiente o activa");
-    }
+    const [conv] = await tx.select().from(schema.conversation).where(and(eq(schema.conversation.id, input.conversationId), eq(schema.conversation.organizationId, input.organizationId))).for("update");
+    if (!conv) throw new Error("Conversación no disponible");
+    const blocked = await tx.execute(sql`select 1 from demo_whatsapp_link l
+      join demo_session s on (s.organization_id,s.id)=(l.organization_id,l.external_session_id)
+      join demo_identity_route r on r.organization_id=l.organization_id and r.channel='whatsapp' and r.identity_lookup=l.phone_lookup
+      where s.organization_id=${input.organizationId} and s.conversation_id=${input.conversationId}
+      and r.mode<>'commercial' limit 1`);
+    if (blocked.length) throw new Error("Conversación en demostración o cuarentena");
+    if (input.aiGenerated && (!conv.aiEnabled || conv.handoffAt || conv.handoffPendingMessageId))
+      throw new Error("Atención humana pendiente o activa");
     await tx.insert(schema.message).values({ id: messageId, organizationId: input.organizationId,
       conversationId: input.conversationId, direction: "out", type: "text", text: input.text,
       status: "pending", origin: input.aiGenerated ? "ai" : "operator", aiGenerated: input.aiGenerated ?? false });
@@ -112,6 +119,7 @@ export async function barrerEnviosWhatsAppZernio() {
   if (process.env.ZERNIO_WHATSAPP_ENABLED !== "true") return;
   const db = getDb(), now = new Date();
   await recuperarSalidasInciertasZernio();
+  await caducarDemosConversacionales().catch(() => {});
   if (process.env.ZERNIO_NEA_AUTO_ENABLED === "true" || process.env.DEMO_EXTERNAL_DELIVERY_ENABLED === "true") {
     const retenidos = await db.select({ id: schema.zernioWhatsappOutbox.id }).from(schema.zernioWhatsappOutbox)
       .where(eq(schema.zernioWhatsappOutbox.status, "retenido")).limit(20);

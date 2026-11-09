@@ -1,10 +1,13 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { resolveInstanceOrg } from "@/server/bot/auth";
+import { telefonoWhatsApp } from "../domain/whatsapp";
+import { canalConversacional } from "./whatsapp-offer";
 import { getSql } from "@/lib/db";
 import type { AdminActor } from "../domain/contracts";
 import { configuredDemoProvider, realDemoSend, reconcileDemoOperation } from "./finance";
 import { simulatorCommand, SimulatorError } from "./simulator";
-import { readDemoDelivery } from "./delivery";
-import { canalDemoWhatsApp, cerrarVinculoWhatsApp, cerrarVinculoWhatsAppEnTx, estadoVinculoWhatsApp, prepararVinculoWhatsApp } from "./whatsapp-link";
+import { readDemoDelivery, reconcileDemoNotice } from "./delivery";
+import { canalDemoWhatsApp, cerrarVinculoWhatsApp, cerrarVinculoWhatsAppEnTx, estadoVinculoWhatsApp, numeroDemoWhatsApp, prepararVinculoWhatsApp } from "./whatsapp-link";
 
 const huella = (token: string) => createHash("sha256").update(token).digest("hex");
 export const webHabilitada = () => process.env.DEMO_WEB_ENABLED === "true";
@@ -17,12 +20,38 @@ export function contactoDemoWeb() {
   return "mailto:contacto@modonext.tech?subject=Informaci%C3%B3n%20sobre%20Vocero";
 }
 
-export async function invitarDemoWeb(actor: AdminActor, spaceId: string) {
+export async function catalogoConversacional() {
+  const number = canalConversacional() ? numeroDemoWhatsApp() : null;
+  if (!number) return null;
+  const org = await resolveInstanceOrg();
+  if (!org) return null;
+  const spaces = await getSql()`select p.name,v.name as assistant from demo_space p
+    join demo_profile_version v on (v.organization_id,v.space_id,v.id)=(p.organization_id,p.id,p.current_profile_version_id)
+    join member u on u.organization_id=p.organization_id and u.user_id=v.created_by and u.role in ('owner','admin')
+    join zernio_whatsapp_credentials z on z.organization_id=p.organization_id and z.enabled
+    where p.organization_id=${org} and p.status='active'
+    and 2=(select count(*) from demo_limits l where l.organization_id=p.organization_id and (l.space_id is null or l.space_id=p.id)
+      and l.enabled and l.window_start<=clock_timestamp() and l.window_end>clock_timestamp() and l.budget_micro_usd>0)
+    order by p.name limit 20`;
+  return spaces.length ? { number, demos: spaces.map(s => ({ name: String(s.name), assistant: String(s.assistant) })) } : null;
+}
+
+export async function invitarDemoWeb(actor: AdminActor, spaceId: string, phone?: string) {
   if (!webHabilitada()) throw new SimulatorError("not_found", 404);
+  if (phone && !telefonoWhatsApp(phone)) throw new SimulatorError("invalid_phone", 422);
   // Resolver la credencial localmente, sin cotizar ni llamar al proveedor.
   await configuredDemoProvider(actor.organizationId);
   const token = randomBytes(32).toString("base64url");
   const session = await simulatorCommand(actor, { action: "start", spaceId, requestKey: randomUUID() }, { tokenHash: huella(token) });
+  if (phone) {
+    try {
+      const whatsapp = await prepararVinculoWhatsApp({ id: session.id, organization_id: actor.organizationId }, phone);
+      return { id: session.id, token, whatsapp };
+    } catch (e) {
+      await revocarDemoWeb(actor, spaceId, String(session.id));
+      throw e;
+    }
+  }
   return { id: session.id, token };
 }
 
@@ -109,6 +138,9 @@ export async function listarDemosWeb(actor: AdminActor, spaceId: string) {
       'deliveryPending',(select max(w.id) from demo_usage_operation w join zernio_whatsapp_outbox j
         on j.organization_id=w.organization_id and j.request_key='demo:'||w.id
         where w.organization_id=s.organization_id and w.session_id=ext.id and j.status in ('iniciado','incierto')),
+      'noticePending',(select max(j.id) from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
+        where m.organization_id=s.organization_id and m.demo_session_id=ext.id and j.request_key in
+          ('demo-notice:'||ext.id||':started','demo-notice:'||ext.id||':ended') and j.status in ('iniciado','incierto')),
       'dispatchErrors',(select count(*) from dispatch d where d.organization_id=s.organization_id
         and d.demo_session_id=ext.id and d.status in ('caducado','descartado') and d.last_error is not null),
       'pending',(select count(*) from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
@@ -129,8 +161,8 @@ export async function revocarDemoWeb(actor: AdminActor, spaceId: string, session
     const [s] = await sql`select state from demo_session where organization_id=${org} and space_id=${spaceId}
       and kind='web' and id=${sessionId} for update`;
     if (!s) throw new SimulatorError("not_found", 404);
-    if (s.state !== "active") return;
-    await sql`update demo_session set state='revoked',ended_at=clock_timestamp() where id=${sessionId}`;
+    if (s.state !== "active" && !(await sql`select 1 from demo_whatsapp_link l join demo_session x on (x.organization_id,x.space_id,x.id)=(l.organization_id,l.space_id,l.external_session_id) where l.organization_id=${org} and l.web_session_id=${sessionId} and x.state='active'`)[0]) return;
+    await sql`update demo_session set state='revoked',ended_at=clock_timestamp() where organization_id=${org} and id=${sessionId} and state='active'`;
     await cerrarVinculoWhatsAppEnTx(sql, org, sessionId, "revoked", actor.userId);
     const id = randomUUID();
     await sql`insert into demo_admin_audit(id,organization_id,space_id,actor_user_id,action,target_id,reason_code,request_id,result)
@@ -154,4 +186,12 @@ export async function conciliarWhatsAppWeb(actor: AdminActor, spaceId: string, o
   if (!op) throw new SimulatorError("not_found", 404);
   if (tipo === "delivery") return readDemoDelivery(actor.organizationId, op.session_id, op.operation_key, true);
   return reconcileDemoOperation(actor, spaceId, operationId, await configuredDemoProvider(actor.organizationId), true);
+}
+
+export async function conciliarAvisoWhatsApp(actor: AdminActor, spaceId: string, noticeId: string) {
+  const result = await reconcileDemoNotice(actor.organizationId, spaceId, noticeId);
+  const id = randomUUID();
+  await getSql()`insert into demo_admin_audit(id,organization_id,space_id,actor_user_id,action,target_id,reason_code,request_id,result)
+    values(${id},${actor.organizationId},${spaceId},${actor.userId},'whatsapp_notice_reviewed',${noticeId},'provider_confirmation',${id},${result.status === "uncertain" ? "pending" : "success"})`;
+  return result;
 }

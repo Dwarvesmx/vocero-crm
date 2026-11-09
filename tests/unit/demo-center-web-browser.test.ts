@@ -11,7 +11,7 @@ it("presenta el recorrido de prospecto en Chrome móvil y escritorio con API con
       contents: `import React from "react"; import {createRoot} from "react-dom/client";
         import {PortalDemo} from "./src/components/demo-center/portal";
         createRoot(document.getElementById("root")).render(<React.StrictMode>
-          <PortalDemo contacto="mailto:contacto@modonext.tech" />
+          <PortalDemo contacto="mailto:contacto@modonext.tech" catalogo={{number:"525500000099",demos:[{name:"Pizza Nova",assistant:"NOVA"}]}} />
         </React.StrictMode>);`,
       loader: "tsx", resolveDir: process.cwd(),
     },
@@ -62,14 +62,21 @@ it("presenta el recorrido de prospecto en Chrome móvil y escritorio con API con
         await page.goto(`https://portal.test/demos#acceso=${pizza}&acceso=${casa}`);
         await page.addStyleTag({ content: style.css });
         await page.addScriptTag({ content: bundle.outputFiles[0]!.text });
+        const catalogo = page.getByRole("region", { name: "Demostraciones por WhatsApp" });
+        const directo = catalogo.getByRole("link", { name: "Abrir WhatsApp", exact: true });
+        await directo.waitFor();
+        const target = new URL((await directo.getAttribute("href"))!);
+        expect(target.searchParams.get("text")).toBe("Quiero una demo de Pizza Nova");
+        expect(await catalogo.getByRole("img", { name: "QR para abrir WhatsApp" }).isVisible()).toBe(viewport.width > 640);
+        expect(await catalogo.getByRole("link", { name: "WhatsApp Web" }).isVisible()).toBe(viewport.width > 640);
         const demoPizza = page.getByRole("button", { name: /Pizza Nova.*NOVA/ });
         await demoPizza.focus();
         await demoPizza.press("Enter");
         expect(new URL(page.url()).hash).toBe("");
-        await page.getByRole("button", { name: "Probar por WhatsApp" }).click();
+        await page.getByRole("button", { name: "Vincular desde una invitación" }).click();
         await page.getByRole("textbox", { name: "Tu número de WhatsApp con código de país" }).fill("+525500000001");
-        await page.getByRole("button", { name: "Preparar acceso" }).click();
-        const wa = page.getByRole("link", { name: "Abrir WhatsApp" });
+        await page.getByRole("button", { name: "Preparar mensaje de vinculación" }).click();
+        const wa = page.getByRole("region", { name: /WhatsApp · demostración/ }).getByRole("link", { name: "Abrir WhatsApp", exact: true });
         await wa.waitFor();
         expect(await wa.getAttribute("href")).toContain("https://wa.me/525500000099?text=");
         pizzaData.whatsapp = { state: "linked" };

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PortalDemo } from "@/components/demo-center/portal";
-import { contactoDemoWeb, webHabilitada } from "@/server/demo-center/infra/web";
+import { catalogoConversacional, contactoDemoWeb, webHabilitada } from "@/server/demo-center/infra/web";
 
 export const metadata: Metadata = {
   title: "Demostraciones | ModoNext",
@@ -10,7 +10,8 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-export default function PaginaDemos() {
+export const dynamic = "force-dynamic";
+export default async function PaginaDemos() {
   if (!webHabilitada()) notFound();
-  return <PortalDemo contacto={contactoDemoWeb()} />;
+  return <PortalDemo contacto={contactoDemoWeb()} catalogo={await catalogoConversacional()} />;
 }

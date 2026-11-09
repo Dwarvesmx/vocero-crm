@@ -4,6 +4,7 @@ import {SimulatorError} from './simulator';
 import {externalIdentityLookup} from './external-session';
 import {descifrar} from '@/server/zernio/whatsapp-credenciales';
 import {consultarConfirmacionDemoZernio} from '@/server/zernio/whatsapp-envio';
+import {autorizarAvisoDemo} from './whatsapp-notice';
 import {canalDemoWhatsApp} from './whatsapp-link';
 
 async function resolve(sql:ReturnType<typeof getSql>,org:string,session:string,operation:string){
@@ -65,11 +66,20 @@ export async function authorizeDemoDelivery(id:string){
  if(process.env.DEMO_EXTERNAL_DELIVERY_ENABLED!=='true'||process.env.ZERNIO_WHATSAPP_ENABLED!=='true')return null;
  const db=getSql();return db.begin(async sql=>{
   const [ref]=await sql`select j.*,m.demo_session_id,m.scope_kind,m.route_generation,m.text from zernio_whatsapp_outbox j join message m on m.id=j.message_id and m.organization_id=j.organization_id where j.id=${id}`;
-  if(!ref||ref.scope_kind!=='demo'||ref.status!=='retenido'||!ref.request_key.startsWith('demo:'))return null;
+  if(!ref||ref.scope_kind!=='demo'||ref.status!=='retenido'||!(ref.request_key.startsWith('demo:')||ref.request_key.startsWith('demo-notice:')))return null;
   await sql`select id from organization where id=${ref.organization_id} for update`;
+  if(ref.request_key.startsWith('demo:')){
+   const [start]=await sql`select status from zernio_whatsapp_outbox where organization_id=${ref.organization_id}
+     and request_key=${'demo-notice:'+ref.demo_session_id+':started'}`;
+   if(start && start.status!=='completado')return null;
+  }
   const [op]=await sql`select operation_key from demo_usage_operation where organization_id=${ref.organization_id} and id=${ref.request_key.slice(5)} and session_id=${ref.demo_session_id}`;
   let row;
-  try{if(!op)throw Error('not_found');row=await resolve(sql as unknown as ReturnType<typeof getSql>,ref.organization_id,ref.demo_session_id,op.operation_key);}
+  try{
+   if(ref.request_key.startsWith('demo-notice:')) row=await autorizarAvisoDemo(sql,id);
+   else if(op) row=await resolve(sql as unknown as ReturnType<typeof getSql>,ref.organization_id,ref.demo_session_id,op.operation_key);
+   if(!row)throw new SimulatorError('not_found',404);
+  }
   catch{
    await sql`update zernio_whatsapp_outbox set status='cancelado',updated_at=clock_timestamp() where id=${id} and status='retenido'`;
    await sql`update message set status='failed' where id=${ref.message_id} and scope_kind='demo'`;
@@ -107,4 +117,31 @@ export async function readDemoDelivery(org:string,session:string,operation:strin
   }
  }
  return {deliveryId:row.id,messageId:row.message_id,providerMessageId:row.wa_message_id,status:['delivered','read'].includes(row.message_status)?'delivered':row.message_status==='failed'&&row.status==='completado'?'failed':({retenido:'pending',iniciado:'processing',incierto:'uncertain',completado:'accepted',fallido:'failed',cancelado:'cancelled'} as Record<string,string>)[row.status]??'uncertain'};
+}
+
+/** Un aviso incierto solo se resuelve con identificador y confirmación verificables del proveedor. */
+export async function reconcileDemoNotice(org:string,space:string,id:string){
+ const db=getSql();const [row]=await db`select j.id,j.account_ref,j.thread_ref,j.request_key,j.status,m.id as message_id,m.wa_message_id,m.status as message_status
+  from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
+  join demo_session s on (s.organization_id,s.id)=(m.organization_id,m.demo_session_id)
+  join demo_whatsapp_link l on (l.organization_id,l.space_id,l.external_session_id)=(s.organization_id,s.space_id,s.id)
+  where j.id=${id} and j.organization_id=${org} and s.space_id=${space} and m.scope_kind='demo'
+  and j.request_key in ('demo-notice:'||s.id||':started','demo-notice:'||s.id||':ended')`;
+ if(!row)throw new SimulatorError('not_found',404);
+ if(!['iniciado','incierto','completado'].includes(row.status))return {status:row.status};
+ if(!row.wa_message_id)return {status:'uncertain'};
+ const receipt=await consultarConfirmacionDemoZernio({organizationId:org,accountRef:row.account_ref,threadRef:row.thread_ref,requestKey:row.request_key,messageId:row.wa_message_id});
+ if(!receipt)return {status:'uncertain'};
+ if(row.wa_message_id&&row.wa_message_id!==receipt.messageId)throw new SimulatorError('receipt_conflict');
+ await db.begin(async tx=>{
+  const [current]=await tx`select j.status,m.wa_message_id,m.status as message_status from zernio_whatsapp_outbox j
+    join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id) where j.id=${id} and j.organization_id=${org} for update of j,m`;
+  if(!current||!['iniciado','incierto','completado'].includes(current.status))throw new SimulatorError('receipt_conflict');
+  if(current.wa_message_id&&current.wa_message_id!==receipt.messageId)throw new SimulatorError('receipt_conflict');
+  if(receipt.status==='failed'&&['delivered','read'].includes(current.message_status))return;
+  await tx`update message set wa_message_id=${receipt.messageId},status=case when status='read' then 'read' when status='delivered' then 'delivered' else ${receipt.status} end,error=null where organization_id=${org} and id=${row.message_id}`;
+  await tx`update zernio_whatsapp_outbox set status=${receipt.status==='failed'?'fallido':'completado'},leased_until=null,updated_at=clock_timestamp()
+    where organization_id=${org} and id=${id} and status in ('iniciado','incierto','completado')`;
+ });
+ return {status:receipt.status==='failed'?'failed':(['delivered','read'].includes(receipt.status)?'delivered':'accepted')};
 }

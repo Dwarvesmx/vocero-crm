@@ -8,10 +8,10 @@ import { SimulatorError } from "./simulator";
 export const hashCodigo = (value: string) => createHash("sha256").update(value).digest("hex");
 export const canalDemoWhatsApp = () => process.env.DEMO_WHATSAPP_ENABLED === "true" &&
   process.env.ZERNIO_WHATSAPP_ENABLED === "true";
-const destino = () => telefonoWhatsApp(process.env.DEMO_WHATSAPP_NUMBER);
+export const numeroDemoWhatsApp = () => telefonoWhatsApp(process.env.DEMO_WHATSAPP_NUMBER);
 
 export async function prepararVinculoWhatsApp(web: Row, numero: string) {
-  const receptor = destino(), phone = telefonoWhatsApp(numero);
+  const receptor = numeroDemoWhatsApp(), phone = telefonoWhatsApp(numero);
   if (!canalDemoWhatsApp() || !receptor) throw new SimulatorError("whatsapp_unavailable", 503);
   if (!phone) throw new SimulatorError("invalid_phone", 422);
   const codigo = randomBytes(24).toString("base64url");
@@ -85,6 +85,12 @@ export async function cerrarVinculoWhatsAppEnTx(sql: TransactionSql, org: string
       where organization_id=${org} and web_session_id=${webId}`;
     const [link] = await sql`select external_session_id,phone_lookup,space_id from demo_whatsapp_link where organization_id=${org} and web_session_id=${webId}`;
     if (!link?.external_session_id) return;
+    if (estado === "revoked") {
+      await sql`update demo_authorization a set state='revoked',version=a.version+1 from demo_session s
+        join demo_identity_route r on r.organization_id=s.organization_id and r.session_id=s.id and r.generation=s.route_generation
+        where s.organization_id=${org} and s.id=${link.external_session_id} and r.mode='demo'
+        and (a.organization_id,a.space_id,a.id)=(s.organization_id,s.space_id,s.authorization_id) and a.state='active'`;
+    }
     await bloquearRutaWhatsApp(sql, org, link.phone_lookup, link.external_session_id, estado, "portal_" + estado);
     if (actor) {
       const id = randomUUID();

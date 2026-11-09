@@ -64,7 +64,7 @@ export async function iniciarSesionWhatsApp(sql:TransactionSql,org:string,input:
   for(const p of policies){
    if(!p.enabled||new Date(p.window_start)>now||new Date(p.window_end)<=now||Math.min(p.max_duration_seconds,p.max_idle_seconds,p.max_concurrent_sessions,p.max_sessions_started)<=0)throw new SimulatorError('policy_required');
    const [count]=await sql`select count(*) filter(where state='active' and expires_at>clock_timestamp() and idle_deadline>clock_timestamp())::int as active,
-    count(*) filter(where started_at>=${new Date(p.window_start).toISOString()} and started_at<${new Date(p.window_end).toISOString()})::int as started
+    count(*) filter(where not exists(select 1 from demo_session_event e where e.organization_id=demo_session.organization_id and e.session_id=demo_session.id and e.type='whatsapp_demo_offered') and started_at>=${new Date(p.window_start).toISOString()} and started_at<${new Date(p.window_end).toISOString()})::int as started
     from demo_session where organization_id=${org} and (${p.space_id}::text is null or space_id=${p.space_id})`;
    if(count!.active>=p.max_concurrent_sessions||count!.started>=p.max_sessions_started)throw new SimulatorError('quota_exceeded',429);
   }

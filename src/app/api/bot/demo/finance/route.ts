@@ -1,3 +1,4 @@
+import { cerrarPorCuotaDemo } from "@/server/demo-center/infra/whatsapp-lifecycle";
 import {z} from "zod";
 import {getSql} from "@/lib/db";
 import {apiError,parseBody} from "@/lib/api";
@@ -39,5 +40,9 @@ export async function POST(req:Request){
   [op]=await sql`select * from demo_usage_operation where organization_id=${org} and operation_key=${b.operationKey} and session_id=${s.id}`;
   if(!op)throw new SimulatorError('not_found',404);
   return Response.json({contractVersion:1,operationId:op.id,operationKey:b.operationKey,status:op.status,reservedMicroUsd:String(op.reserved_amount),actualMicroUsd:op.actual_amount==null?null:String(op.actual_amount)});
- }catch(e){return e instanceof SimulatorError?apiError(e.status,e.code,'Operación financiera no autorizada.'):apiError(503,'finance_unavailable','Contabilidad no disponible.');}
+ }catch(e){
+  if(b.action==='reserve' && e instanceof SimulatorError && ['budget_exceeded','quota_exceeded'].includes(e.code)){
+   await cerrarPorCuotaDemo(org!,b.spaceId,b.sessionId,b.operationKey,b.inputDigest).catch(()=>{});
+  }
+  return e instanceof SimulatorError?apiError(e.status,e.code,'Operación financiera no autorizada.'):apiError(503,'finance_unavailable','Contabilidad no disponible.');}
 }

@@ -1,3 +1,7 @@
+import * as credenciales from "@/server/zernio/whatsapp-credenciales";
+import { build } from "esbuild";
+import { chromium } from "playwright";
+import { GET as ADMIN_GET, POST as ADMIN_POST } from "@/app/api/demo-center/web/route";
 import { reconcileDemoNotice } from "@/server/demo-center/infra/delivery";
 import { encolarAvisoDemo } from "@/server/demo-center/infra/whatsapp-notice";
 import { revocarDemoWeb } from "@/server/demo-center/infra/web";
@@ -26,6 +30,11 @@ import { POST as ENTREGA } from "@/app/api/bot/demo/delivery/route";
 import { procesarEvento } from "@/server/webhooks/worker";
 import { huellaDe } from "@/server/webhooks/eventos";
 
+const adminAuth = vi.hoisted(() => ({ role: "owner" }));
+vi.mock("@/lib/auth/session", () => ({
+  requireSession: async () => ({ userId: "wa-owner", organizationId: "wa-example", role: adminAuth.role }),
+  UnauthorizedError: class UnauthorizedError extends Error {},
+}));
 vi.mock("next/server", async original => ({ ...await original<typeof import("next/server")>(), after: vi.fn() }));
 const efectos = vi.hoisted(() => ({ generadas: 0, salidas: 0, avisos: 0, receipt: null as null | {messageId:string;status:"delivered"} }));
 vi.mock("@/server/demo-center/infra/finance", async original => ({
@@ -275,6 +284,21 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect(await Promise.all([repetir(), repetir()])).toEqual([start!.id, start!.id]);
       await expect(sql.begin(async tx => encolarAvisoDemo(tx, org, linked!.id, cuenta, "hilo-distinto", "started", consent.message.sentAt)))
         .rejects.toMatchObject({ code: "delivery_conflict" });
+      const [costBefore] = await sql`select count(*)::int as n from demo_usage_operation where session_id=${linked!.id}`;
+      await sql`update zernio_whatsapp_credentials set enabled=false where organization_id=${org}`;
+      await expect(liberarSalidaZernio(start!.id)).rejects.toMatchObject({code:"transport_unavailable"});
+      const [beforeSend] = await sql`select status,attempts from zernio_whatsapp_outbox where id=${start!.id}`;
+      expect(beforeSend).toMatchObject({status:"retenido",attempts:0});
+      expect(efectos.avisos).toBe(0);
+      const [costAfter] = await sql`select count(*)::int as n from demo_usage_operation where session_id=${linked!.id}`;
+      expect(costAfter!.n).toBe(costBefore!.n);
+      await sql`update zernio_whatsapp_credentials set enabled=true where organization_id=${org}`;
+      const timeoutPrevio = vi.spyOn(credenciales, "descifrar").mockImplementationOnce(() => { throw new Error("timeout antes del transporte"); });
+      await expect(liberarSalidaZernio(start!.id)).rejects.toThrow("timeout antes del transporte");
+      timeoutPrevio.mockRestore();
+      const [timeoutState] = await sql`select status,attempts from zernio_whatsapp_outbox where id=${start!.id}`;
+      expect(timeoutState).toMatchObject({status:"retenido",attempts:0});
+      expect(efectos.avisos).toBe(0);
       await Promise.all([liberarSalidaZernio(start!.id), liberarSalidaZernio(start!.id)]);
       expect(efectos.avisos).toBe(1);
       const [startStatus] = await sql`select status from zernio_whatsapp_outbox where id=${start!.id}`;
@@ -335,7 +359,46 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       await sql`update demo_session set state='active',ended_at=null,expires_at=clock_timestamp()+interval '5 minutes' where id=${linked!.id}`;
       await sql`update demo_identity_route set mode='demo',session_id=${linked!.id},
         generation=(select route_generation from demo_session where id=${linked!.id}) where organization_id=${org}`;
-      await Promise.all([revocarDemoWeb(actor, "pizza", linked!.web_session_id), revocarDemoWeb(actor, "pizza", linked!.web_session_id)]);
+      await sql`update zernio_whatsapp_outbox set status='incierto' where id=${end!.id}`;
+      const bundle = await build({stdin:{contents:`import React from "react";import {createRoot} from "react-dom/client";
+        import {InvitacionesDemoWeb} from "./src/components/demo-center/web-admin";
+        createRoot(document.getElementById("root")).render(<InvitacionesDemoWeb spaceId="pizza"/>);`,
+        loader:"tsx",resolveDir:process.cwd()},jsx:"automatic",bundle:true,write:false});
+      vi.stubEnv("DEMO_WEB_ENABLED","true");
+      const server=createServer(async(req,res)=>{
+        try{
+          if(req.url==="/"){res.writeHead(200,{"content-type":"text/html"}).end('<div id="root"></div><script src="/bundle.js"></script>');return;}
+          if(req.url==="/bundle.js"){res.writeHead(200,{"content-type":"application/javascript"}).end(bundle.outputFiles[0]!.text);return;}
+          if(req.url?.startsWith("/api/demo-center/web")){
+            const parts:Buffer[]=[];for await(const part of req)parts.push(Buffer.from(part));
+            const request=new Request("http://127.0.0.1:55536"+req.url,{method:req.method,headers:req.headers as Record<string,string>,...(req.method==="POST"&&{body:Buffer.concat(parts)})});
+            const response=req.method==="POST"?await ADMIN_POST(request):await ADMIN_GET(request);
+            res.writeHead(response.status,Object.fromEntries(response.headers)).end(await response.text());return;
+          }
+          res.writeHead(404).end();
+        }catch(e){res.writeHead(500).end(String(e));}
+      });
+      await new Promise<void>((ok,fail)=>{server.once("error",fail);server.listen(55536,"127.0.0.1",ok);});
+      const browser=await chromium.launch({channel:"chrome",headless:true});
+      try{
+        const page=await browser.newPage();
+        await page.goto("http://127.0.0.1:55536/");
+        const row=page.locator("li").filter({hasText:"WhatsApp"}).first();
+        await row.getByRole("button",{name:"Finalizar y revocar WhatsApp"}).click();
+        adminAuth.role="member";
+        await row.getByRole("button",{name:"Confirmar"}).click();
+        await page.getByRole("alert").waitFor();
+        const [stillActive]=await sql`select state from demo_session where id=${linked!.id}`;
+        expect(stillActive!.state).toBe("active");
+        adminAuth.role="owner";
+        await row.getByRole("button",{name:"Finalizar y revocar WhatsApp"}).click();
+        const confirm=row.getByRole("button",{name:"Confirmar"});
+        await confirm.dblclick({timeout:3000}).catch(async()=>{if(await confirm.isVisible())await confirm.click();});
+        await row.getByText(/En cuarentena/).waitFor();
+        await row.getByRole("button",{name:"Restituir atención comercial"}).click();
+        await row.getByRole("button",{name:"Confirmar"}).click();
+        await page.getByRole("alert").waitFor();
+      }finally{adminAuth.role="owner";await browser.close();await new Promise<void>(ok=>server.close(()=>ok()));}
       const [adminClosed] = await sql`select s.state,a.state as authorization,r.mode from demo_session s
         join demo_authorization a on a.id=s.authorization_id join demo_identity_route r on r.organization_id=s.organization_id
         where s.id=${linked!.id}`;
@@ -344,5 +407,5 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         and action='whatsapp_revoked' and target_id=${linked!.id}`;
       expect(audits!.n).toBe(1);
     } finally { vi.unstubAllEnvs(); }
-  }, 30000);
+  }, 60000);
 });

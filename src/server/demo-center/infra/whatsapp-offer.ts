@@ -48,10 +48,10 @@ export async function ofrecerDemoWhatsApp(org: string, conversation: string, dis
     const lookup = externalIdentityLookup(org, account, "phone", phone);
     const [route] = await sql`select mode from demo_identity_route where organization_id=${org} and channel='whatsapp' and identity_lookup=${lookup}`;
     if (route && route.mode !== "commercial") throw new SimulatorError("thread_unavailable");
-    const available = await sql`select p.id,p.name,p.commercial_name,p.sector,v.name as assistant,v.created_by
+    const available = await sql`select p.id,p.name,p.commercial_name,p.sector,p.visual_identity,v.name as assistant,v.created_by
       from demo_space p join demo_profile_version v on (v.organization_id,v.space_id,v.id)=(p.organization_id,p.id,p.current_profile_version_id)
       join member u on u.organization_id=p.organization_id and u.user_id=v.created_by and u.role in ('owner','admin')
-      where p.organization_id=${org} and p.status='active'
+      where p.organization_id=${org} and p.status='active' and coalesce(p.visual_identity->>'demoPolicy','supervised') <> 'disabled'
       and exists(select 1 from demo_limits l where l.organization_id=p.organization_id and l.space_id=p.id
         and l.enabled and clock_timestamp()>=l.window_start and clock_timestamp()<l.window_end) order by p.name`;
     const matches = available.filter(p => [p.sector,p.name,p.commercial_name,p.assistant].some(s => clave(String(s)) === clave(sector)));
@@ -59,12 +59,35 @@ export async function ofrecerDemoWhatsApp(org: string, conversation: string, dis
     const p = matches[0]!;
     const phoneHash = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
       .update(JSON.stringify(["demo-phone:v1", org, phone])).digest("hex");
-    // Solo una identidad activa de WhatsApp para toda la organización durante la prueba.
+    // La autorización pertenece a este espacio y al teléfono verificado en el evento firmado.
     const allowed = await sql`select id,space_id,phone_lookup from demo_authorization
-      where organization_id=${org} and channel='whatsapp' and state='active'
-      and (expires_at is null or expires_at>clock_timestamp()) for update`;
-    if (allowed.length !== 1 || allowed[0]!.space_id !== p.id || allowed[0]!.phone_lookup !== phoneHash)
+      where organization_id=${org} and space_id=${p.id} and phone_lookup=${phoneHash}
+      and channel='whatsapp' and state='active' and (expires_at is null or expires_at>clock_timestamp()) for update`;
+    if (process.env.DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT === "true") {
+      const [total] = await sql`select count(*)::int as n from demo_authorization where organization_id=${org}
+        and channel='whatsapp' and state='active' and (expires_at is null or expires_at>clock_timestamp())`;
+      if (total!.n !== 1) throw new SimulatorError("authorization_unavailable", 403);
+    }
+    const auto = p.visual_identity?.demoPolicy === "automatic" && process.env.DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT !== "true";
+    if (!allowed.length && auto) {
+      const [revoked] = await sql`select 1 from demo_authorization where organization_id=${org} and space_id=${p.id}
+        and phone_lookup=${phoneHash} and channel='whatsapp' and state='revoked' limit 1`;
+      if (revoked) throw new SimulatorError("authorization_unavailable", 403);
+    } else if (allowed.length !== 1 || allowed[0]!.space_id !== p.id || allowed[0]!.phone_lookup !== phoneHash)
       throw new SimulatorError("authorization_unavailable", 403);
+
+    const caps = await sql`select max_sessions_started,window_start,window_end,space_id from demo_limits
+      where organization_id=${org} and (space_id is null or space_id=${p.id}) and enabled
+        and window_start<=clock_timestamp() and window_end>clock_timestamp() for update`;
+    if (caps.length !== 2) throw new SimulatorError("policy_required");
+    for (const cap of caps) {
+      const [used] = await sql`select count(*)::int as n from demo_session s
+        join demo_authorization a on (a.organization_id,a.space_id,a.id)=(s.organization_id,s.space_id,s.authorization_id)
+        where s.organization_id=${org} and a.phone_lookup=${phoneHash} and s.kind='external'
+        and (${cap.space_id}::text is null or s.space_id=${cap.space_id})
+        and s.started_at>=${cap.window_start} and s.started_at<${cap.window_end}`;
+      if (used!.n >= cap.max_sessions_started) throw new SimulatorError("quota_exceeded",429);
+    }
 
     const [prior] = await sql`select e.metadata,l.space_id from demo_whatsapp_link l join demo_session_event e
       on (e.organization_id,e.space_id,e.session_id)=(l.organization_id,l.space_id,l.web_session_id)
@@ -93,7 +116,7 @@ export async function ofrecerDemoWhatsApp(org: string, conversation: string, dis
     const bsuid = event.message.sender?.businessScopedUserId;
     await sql`insert into demo_session_event(id,organization_id,space_id,session_id,type,actor,reason_code,metadata)
       values(${randomUUID()},${org},${p.id},${id},'whatsapp_demo_offered','crm_nea','explicit_consent_required',
-        ${JSON.stringify({ authorizationId: allowed[0]!.id, thread, conversation, text, alias: bsuid ? externalIdentityLookup(org, account, "bsuid", bsuid) : null })}::jsonb)`;
+        ${JSON.stringify({ authorizationId: allowed[0]?.id ?? null, authorizationOrigin: allowed.length ? "administrator" : "automatic_policy", thread, conversation, text, alias: bsuid ? externalIdentityLookup(org, account, "bsuid", bsuid) : null })}::jsonb)`;
     return { status: "offered", message: text };
   });
 }
@@ -106,14 +129,29 @@ export async function ofertaAceptada(sql: TransactionSql, org: string, account: 
     and l.external_session_id is null and l.expires_at>clock_timestamp() and e.type='whatsapp_demo_offered'
     and e.metadata->>'thread'=${event.conversation.id} order by l.created_at desc limit 1`;
   if (!offer || (offer.metadata.alias && alias && offer.metadata.alias !== alias)) return null;
+  const [currentSpace] = await sql`select visual_identity from demo_space where organization_id=${org}
+    and id=${offer.space_id} and status='active' for update`;
+  if (!currentSpace || currentSpace.visual_identity?.demoPolicy === "disabled") return null;
   const phone = telefonoWhatsApp(event.message.sender?.phoneNumber);
   if (!phone) return null;
   const phoneHash = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
     .update(JSON.stringify(["demo-phone:v1", org, phone])).digest("hex");
   const allowed = await sql`select id,space_id,phone_lookup from demo_authorization
-    where organization_id=${org} and channel='whatsapp' and state='active'
-    and (expires_at is null or expires_at>clock_timestamp()) for update`;
-  if (allowed.length !== 1 || allowed[0]!.id !== offer.metadata.authorizationId ||
+    where organization_id=${org} and space_id=${offer.space_id} and phone_lookup=${phoneHash}
+    and channel='whatsapp' and state='active' and (expires_at is null or expires_at>clock_timestamp()) for update`;
+  if (process.env.DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT === "true") {
+    const [total] = await sql`select count(*)::int as n from demo_authorization where organization_id=${org}
+      and channel='whatsapp' and state='active' and (expires_at is null or expires_at>clock_timestamp())`;
+    if (total!.n !== 1) return null;
+  }
+  if (offer.metadata.authorizationOrigin === "automatic_policy") {
+    if (process.env.DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT === "true") return null;
+    const [policy] = await sql`select 1 from demo_space where organization_id=${org} and id=${offer.space_id}
+      and status='active' and visual_identity->>'demoPolicy'='automatic' for update`;
+    const [revoked] = await sql`select 1 from demo_authorization where organization_id=${org} and space_id=${offer.space_id}
+      and phone_lookup=${phoneHash} and channel='whatsapp' and state='revoked' limit 1`;
+    if (!policy || revoked || allowed.length) return null;
+  } else if (allowed.length !== 1 || allowed[0]!.id !== offer.metadata.authorizationId ||
       allowed[0]!.space_id !== offer.space_id || allowed[0]!.phone_lookup !== phoneHash) return null;
   const [sent] = await sql`select j.updated_at at time zone 'UTC' as sent_at from zernio_whatsapp_outbox j
     join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)

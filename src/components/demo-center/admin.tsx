@@ -109,7 +109,7 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
       ...(space ? { action: "edit", id: space.id, expectedGeneration: space.generation } : { action: "create" }),
       space: {
         name: form.get("name"), commercialName: form.get("commercialName"), sector: form.get("sector"),
-        description: form.get("description"), visualIdentity: { color: form.get("color") },
+        description: form.get("description"), visualIdentity: { color: form.get("color"), demoPolicy: form.get("demoPolicy") },
       },
     }, false, event.currentTarget);
   }
@@ -163,6 +163,14 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
             <label className="block">Descripción<textarea className={inputStyle} name="description" maxLength={2000}
               defaultValue={space?.description ?? (sector === "Personalizado" ? "" : "Datos ficticios para una demostración editable.")} /></label>
             <label className="block">Color de identidad<input className="ml-2" name="color" type="color" defaultValue={color} /></label>
+            <label className="block">Acceso conversacional de prospectos
+              <select name="demoPolicy" className={inputStyle} defaultValue={(space?.visualIdentity as {demoPolicy?:string} | undefined)?.demoPolicy ?? "supervised"}>
+                <option value="disabled">Deshabilitado</option>
+                <option value="supervised">Supervisado: autorización administrativa previa</option>
+                <option value="automatic">Automático: identidad verificada y consentimiento</option>
+              </select>
+              <span className="block text-sm text-muted-foreground">Los límites, presupuestos, revocaciones y cuarentenas siguen vigentes.</span>
+            </label>
           </div>
           <button className={buttonStyle} disabled={busy}>Guardar espacio</button>
         </form>}

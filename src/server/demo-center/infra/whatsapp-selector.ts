@@ -112,6 +112,13 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   await sql`update demo_whatsapp_link set external_session_id=${String(sesion.sessionId)},thread_ref=${hilo},
     bsuid_lookup=${persona.alias ?? anteriores.find(l => l.bsuid_lookup)?.bsuid_lookup ?? null},
     linked_at=clock_timestamp() where id=${link.id}`;
+  if (oferta?.metadata.authorizationOrigin === "automatic_policy") {
+    await sql`insert into demo_session_event(id,organization_id,space_id,session_id,type,actor,reason_code)
+      values(${randomUUID()},${org},${link.space_id},${String(sesion.sessionId)},'authorization_granted','crm_policy','signed_explicit_consent')`;
+    const id = randomUUID();
+    await sql`insert into demo_admin_audit(id,organization_id,space_id,actor_user_id,action,target_id,reason_code,request_id,result)
+      values(${id},${org},${link.space_id},${link.actor_user_id},'automatic_authorization_granted',${autorizacion},'signed_explicit_consent',${id},'success')`;
+  }
   if (oferta) await encolarAvisoDemo(sql, org, String(sesion.sessionId), cuenta, hilo, "started", evento.message.sentAt);
   return "linked";
 }

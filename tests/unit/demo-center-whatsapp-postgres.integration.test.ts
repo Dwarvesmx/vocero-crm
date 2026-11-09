@@ -253,7 +253,10 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       await sql`update demo_authorization set state='active' where id=${authorized!.id}`;
       await sql`insert into demo_authorization(id,organization_id,space_id,channel,canonical_phone,phone_lookup,phone_suffix,created_by)
         select 'other-auth',organization_id,space_id,channel,canonical_phone,${"f".repeat(64)},'0000',created_by from demo_authorization where id=${authorized!.id}`;
+      expect((await offer("NOVA")).status).toBe(200);
+      vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "true");
       expect((await offer("NOVA")).status).toBe(403);
+      vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "false");
       await sql`update demo_authorization set state='revoked' where id='other-auth'`;
       const resp = await offer("NOVA");
       const data = await resp.json();
@@ -367,10 +370,20 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       await sql`update demo_session set state='active',ended_at=null,expires_at=clock_timestamp()-interval '1 second' where id=${linked!.id}`;
       await sql`update demo_identity_route set mode='demo',session_id=${linked!.id},
         generation=(select route_generation from demo_session where id=${linked!.id}) where organization_id=${org}`;
+      await sql`update zernio_whatsapp_outbox set status='incierto' where id=${end!.id}`;
       await caducarDemosConversacionales();
       const [expired] = await sql`select s.state,r.mode,r.blocked_reason from demo_session s join demo_identity_route r on r.organization_id=s.organization_id
         where s.id=${linked!.id}`;
       expect(expired).toMatchObject({ state: "expired", mode: "blocked", blocked_reason: "session_deadline" });
+      await sql`update zernio_whatsapp_outbox set status='completado' where id=${end!.id}`;
+      await caducarDemosConversacionales();
+      const [stillBlocked]=await sql`select mode from demo_identity_route where organization_id=${org}`;
+      expect(stillBlocked!.mode).toBe("blocked");
+      await sql`update message set status='delivered' where organization_id=${org} and demo_session_id=${linked!.id}
+        and direction='out' and scope_kind='demo' and status='sent'`;
+      await caducarDemosConversacionales();
+      const [autoRestored]=await sql`select mode from demo_identity_route where organization_id=${org}`;
+      expect(autoRestored!.mode).toBe("commercial");
       await sql`update demo_session set state='active',ended_at=null,expires_at=clock_timestamp()+interval '5 minutes' where id=${linked!.id}`;
       await sql`update demo_identity_route set mode='demo',session_id=${linked!.id},
         generation=(select route_generation from demo_session where id=${linked!.id}) where organization_id=${org}`;
@@ -423,4 +436,73 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect(audits!.n).toBe(1);
     } finally { vi.unstubAllEnvs(); }
   }, 60000);
+
+  it("autoriza automáticamente a dos prospectos aislados y respeta revocación", async () => {
+    vi.stubEnv("DEMO_CONVERSATIONAL_ENABLED", "true");
+    vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "false");
+    try {
+      await sql`insert into demo_space(id,organization_id,name,commercial_name,sector,status,visual_identity)
+        values('auto-space',${org},'Ejemplo universal','Ejemplo universal','otro giro','active',
+          '{"color":"#112233","demoPolicy":"automatic"}'::jsonb)`;
+      await sql`insert into demo_profile_version(id,organization_id,space_id,version,name,tone,instructions,escalation_rules,greeting,role,created_by)
+        values('auto-profile',${org},'auto-space',1,'Asistente ejemplo','Amable','Información propia','','','Información',${owner})`;
+      await sql`update demo_space set current_profile_version_id='auto-profile' where id='auto-space'`;
+      await sql`insert into demo_limits(id,organization_id,space_id,max_duration_seconds,max_idle_seconds,max_concurrent_sessions,
+        max_sessions_started,max_inbound_messages,max_assistant_responses,max_provider_calls,budget_micro_usd,session_budget_micro_usd,window_start,window_end)
+        values('auto-limits',${org},'auto-space',900,300,10,20,10,10,10,1000,100,clock_timestamp()-interval '1 day',clock_timestamp()+interval '1 day')`;
+      await sql`update demo_limits set max_concurrent_sessions=10,max_sessions_started=20,max_inbound_messages=10 where id='global'`;
+      const sessions: string[]=[];
+      for (const suffix of ["71","72"]) {
+        const number="5255112233"+suffix, thread="auto-thread-"+suffix, conv="auto-conv-"+suffix, contact="auto-contact-"+suffix;
+        const incoming=evento("Quiero una demo",{phone:number,bsuid:null});
+        incoming.conversation.id=thread; incoming.message.conversationId=thread;
+        await enviar(incoming);
+        await sql`update webhook_event set status='procesado' where payload->>'id'=${incoming.id}`;
+        await sql`insert into contact(id,organization_id,wa_identity,phone,name) values(${contact},${org},${number},${number},'Ficticio')`;
+        await sql`insert into conversation(id,organization_id,contact_id,channel_thread_ref,ai_enabled) values(${conv},${org},${contact},${thread},true)`;
+        const msg=randomUUID(), dispatch=randomUUID();
+        await sql`insert into message(id,organization_id,conversation_id,wa_message_id,direction,type,text,status,wa_timestamp)
+          values(${msg},${org},${conv},${incoming.message.platformMessageId},'in','text','Quiero una demo','delivered',clock_timestamp())`;
+        await sql`insert into dispatch(id,organization_id,conversation_id,status,message_ids,not_before,first_message_at,last_message_at)
+          values(${dispatch},${org},${conv},'entregado',${JSON.stringify([msg])}::jsonb,clock_timestamp(),clock_timestamp(),clock_timestamp())`;
+        const resp=await OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer",{method:"POST",
+          headers:{"content-type":"application/json","x-api-key":process.env.BOT_API_KEY!},
+          body:JSON.stringify({contractVersion:1,conversationId:conv,dispatchId:dispatch,sector:"otro giro"})}));
+        expect(resp.status).toBe(200);
+        const offer=await resp.json(); expect(offer.status).toBe("offered");
+        const [before]=await sql`select count(*)::int as n from demo_session where organization_id=${org} and conversation_id=${conv}`;
+        expect(before!.n).toBe(0);
+        const out=randomUUID();
+        await sql`insert into message(id,organization_id,conversation_id,direction,type,text,status) values(${out},${org},${conv},'out','text',${offer.message},'sent')`;
+        await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status,updated_at)
+          values(${randomUUID()},${org},${conv},${out},${cuenta},${thread},${'offer-'+suffix},'completado',clock_timestamp()-interval '2 seconds')`;
+        if (suffix === "71") {
+          await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"disabled"'::jsonb) where id='auto-space'`;
+          const denied=evento("ACEPTO DEMO",{phone:number,bsuid:null});denied.conversation.id=thread;denied.message.conversationId=thread;
+          await enviar(denied);
+          const [result]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${denied.id}`;
+          expect(result!.result).toBe("consent_unverified");
+          await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"automatic"'::jsonb) where id='auto-space'`;
+          const hash=createHmac("sha256",Buffer.alloc(32)).update(JSON.stringify(["demo-phone:v1",org,number])).digest("hex");
+          await sql`insert into demo_authorization(id,organization_id,space_id,channel,canonical_phone,phone_lookup,phone_suffix,state,created_by)
+            values('auto-revoked',${org},'auto-space','whatsapp','{}'::jsonb,${hash},'0071','revoked',${owner})`;
+          const revoked=evento("ACEPTO DEMO",{phone:number,bsuid:null});revoked.conversation.id=thread;revoked.message.conversationId=thread;
+          await enviar(revoked);
+          const [revokedResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${revoked.id}`;
+          expect(revokedResult!.result).toBe("consent_unverified");
+          await sql`delete from demo_authorization where id='auto-revoked'`;
+        }
+        const accept=evento("ACEPTO DEMO",{phone:number,bsuid:null});accept.conversation.id=thread;accept.message.conversationId=thread;
+        await enviar(accept);await enviar({...accept,id:randomUUID()});
+        const [acceptResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${accept.id}`;
+        expect(acceptResult?.result).toBe("linked");
+        const [session]=await sql`select id,profile_version_id from demo_session where organization_id=${org} and conversation_id=${conv} and state='active'`;
+        expect(session?.profile_version_id).toBe("auto-profile");sessions.push(session!.id);
+      }
+      expect(new Set(sessions).size).toBe(2);
+      const [audits]=await sql`select count(*)::int as n from demo_admin_audit
+        where organization_id=${org} and space_id='auto-space' and action='automatic_authorization_granted'`;
+      expect(audits!.n).toBe(2);
+    } finally { vi.unstubAllEnvs(); }
+  }, 30000);
 });

@@ -1,5 +1,6 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { TransactionSql } from "postgres";
+import { getEnv } from "@/lib/env";
 import { getSql } from "@/lib/db";
 import { permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
 import { posteriorAlCorte, telefonoWhatsApp } from "../domain/whatsapp";
@@ -56,6 +57,15 @@ export async function ofrecerDemoWhatsApp(org: string, conversation: string, dis
     const matches = available.filter(p => [p.sector,p.name,p.commercial_name,p.assistant].some(s => clave(String(s)) === clave(sector)));
     if (matches.length !== 1) return { status: "choose", options: available.map(p => ({ sector: p.sector, demo: p.name })) };
     const p = matches[0]!;
+    const phoneHash = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
+      .update(JSON.stringify(["demo-phone:v1", org, phone])).digest("hex");
+    // Solo una identidad activa de WhatsApp para toda la organización durante la prueba.
+    const allowed = await sql`select id,space_id,phone_lookup from demo_authorization
+      where organization_id=${org} and channel='whatsapp' and state='active'
+      and (expires_at is null or expires_at>clock_timestamp()) for update`;
+    if (allowed.length !== 1 || allowed[0]!.space_id !== p.id || allowed[0]!.phone_lookup !== phoneHash)
+      throw new SimulatorError("authorization_unavailable", 403);
+
     const [prior] = await sql`select e.metadata,l.space_id from demo_whatsapp_link l join demo_session_event e
       on (e.organization_id,e.space_id,e.session_id)=(l.organization_id,l.space_id,l.web_session_id)
       where l.organization_id=${org} and l.account_ref=${account} and l.phone_lookup=${lookup}
@@ -83,19 +93,28 @@ export async function ofrecerDemoWhatsApp(org: string, conversation: string, dis
     const bsuid = event.message.sender?.businessScopedUserId;
     await sql`insert into demo_session_event(id,organization_id,space_id,session_id,type,actor,reason_code,metadata)
       values(${randomUUID()},${org},${p.id},${id},'whatsapp_demo_offered','crm_nea','explicit_consent_required',
-        ${JSON.stringify({ thread, conversation, text, alias: bsuid ? externalIdentityLookup(org, account, "bsuid", bsuid) : null })}::jsonb)`;
+        ${JSON.stringify({ authorizationId: allowed[0]!.id, thread, conversation, text, alias: bsuid ? externalIdentityLookup(org, account, "bsuid", bsuid) : null })}::jsonb)`;
     return { status: "offered", message: text };
   });
 }
 
 export async function ofertaAceptada(sql: TransactionSql, org: string, account: string, event: EventoWhatsAppZernio,
   lookup: string, alias: string | null, now: Date) {
-  const [offer] = await sql`select l.challenge_hash,e.metadata
+  const [offer] = await sql`select l.challenge_hash,l.space_id,e.metadata
     from demo_whatsapp_link l join demo_session_event e on (e.organization_id,e.space_id,e.session_id)=(l.organization_id,l.space_id,l.web_session_id)
     where l.organization_id=${org} and l.account_ref=${account} and l.phone_lookup=${lookup}
     and l.external_session_id is null and l.expires_at>clock_timestamp() and e.type='whatsapp_demo_offered'
     and e.metadata->>'thread'=${event.conversation.id} order by l.created_at desc limit 1`;
   if (!offer || (offer.metadata.alias && alias && offer.metadata.alias !== alias)) return null;
+  const phone = telefonoWhatsApp(event.message.sender?.phoneNumber);
+  if (!phone) return null;
+  const phoneHash = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
+    .update(JSON.stringify(["demo-phone:v1", org, phone])).digest("hex");
+  const allowed = await sql`select id,space_id,phone_lookup from demo_authorization
+    where organization_id=${org} and channel='whatsapp' and state='active'
+    and (expires_at is null or expires_at>clock_timestamp()) for update`;
+  if (allowed.length !== 1 || allowed[0]!.id !== offer.metadata.authorizationId ||
+      allowed[0]!.space_id !== offer.space_id || allowed[0]!.phone_lookup !== phoneHash) return null;
   const [sent] = await sql`select j.updated_at at time zone 'UTC' as sent_at from zernio_whatsapp_outbox j
     join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
     join demo_whatsapp_link l on l.organization_id=j.organization_id and l.challenge_hash=${offer.challenge_hash}

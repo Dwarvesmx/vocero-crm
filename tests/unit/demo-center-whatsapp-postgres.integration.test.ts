@@ -246,6 +246,15 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect((await offer("NOVA", "invalid")).status).toBe(401);
       expect((await offer("NOVA", process.env.BOT_API_KEY, "otra-conversacion")).status).toBe(403);
       expect(await (await offer("sector desconocido")).json()).toMatchObject({ status: "choose", options: [{ demo: "Casa Horizonte" }, { demo: "NOVA" }] });
+      const [authorized] = await sql`select id from demo_authorization where organization_id=${org} and space_id='pizza' and state='active'`;
+      expect(authorized).toBeTruthy();
+      await sql`update demo_authorization set state='revoked' where id=${authorized!.id}`;
+      expect((await offer("NOVA")).status).toBe(403);
+      await sql`update demo_authorization set state='active' where id=${authorized!.id}`;
+      await sql`insert into demo_authorization(id,organization_id,space_id,channel,canonical_phone,phone_lookup,phone_suffix,created_by)
+        select 'other-auth',organization_id,space_id,channel,canonical_phone,${"f".repeat(64)},'0000',created_by from demo_authorization where id=${authorized!.id}`;
+      expect((await offer("NOVA")).status).toBe(403);
+      await sql`update demo_authorization set state='revoked' where id='other-auth'`;
       const resp = await offer("NOVA");
       const data = await resp.json();
       expect(data).toMatchObject({ status: "offered" });
@@ -271,6 +280,12 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect(evidence?.thread).toBe(hilo);
       expect(+new Date(evidence!.message_created)).toBeGreaterThanOrEqual(+new Date(evidence!.created_at));
       expect(+new Date(evidence!.sent_at)).toBeLessThan(+new Date(evidence!.now));
+      await sql`update demo_authorization set state='revoked' where id=${authorized!.id}`;
+      const revokedConsent=evento("ACEPTO DEMO");
+      await enviar(revokedConsent);
+      const [revokedResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${revokedConsent.id}`;
+      expect(revokedResult!.result).toBe("consent_unverified");
+      await sql`update demo_authorization set state='active' where id=${authorized!.id}`;
       const consent = evento("ACEPTO DEMO");
       expect((await enviar(consent)).status).toBe(200);
       expect((await enviar({ ...consent, id: randomUUID() })).status).toBe(200);

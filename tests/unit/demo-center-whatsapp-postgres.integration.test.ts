@@ -1,3 +1,4 @@
+import { POST as ADMIN_SPACE } from "@/app/api/demo-center/route";
 import * as credenciales from "@/server/zernio/whatsapp-credenciales";
 import { build } from "esbuild";
 import { chromium } from "playwright";
@@ -441,15 +442,23 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
     vi.stubEnv("DEMO_CONVERSATIONAL_ENABLED", "true");
     vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "false");
     try {
-      await sql`insert into demo_space(id,organization_id,name,commercial_name,sector,status,visual_identity)
-        values('auto-space',${org},'Ejemplo universal','Ejemplo universal','otro giro','active',
-          '{"color":"#112233","demoPolicy":"automatic"}'::jsonb)`;
-      await sql`insert into demo_profile_version(id,organization_id,space_id,version,name,tone,instructions,escalation_rules,greeting,role,created_by)
-        values('auto-profile',${org},'auto-space',1,'Asistente ejemplo','Amable','Información propia','','','Información',${owner})`;
-      await sql`update demo_space set current_profile_version_id='auto-profile' where id='auto-space'`;
-      await sql`insert into demo_limits(id,organization_id,space_id,max_duration_seconds,max_idle_seconds,max_concurrent_sessions,
-        max_sessions_started,max_inbound_messages,max_assistant_responses,max_provider_calls,budget_micro_usd,session_budget_micro_usd,window_start,window_end)
-        values('auto-limits',${org},'auto-space',900,300,10,20,10,10,10,1000,100,clock_timestamp()-interval '1 day',clock_timestamp()+interval '1 day')`;
+      const admin = (body:object) => ADMIN_SPACE(new Request("http://127.0.0.1/api/demo-center", {
+        method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}));
+      const created=await admin({action:"create",space:{name:"Ejemplo universal",commercialName:"Ejemplo universal",sector:"otro giro",
+        description:"Ficticio",visualIdentity:{color:"#112233",demoPolicy:"automatic"}}});
+      expect(created.status).toBe(201);
+      const createdData=await created.json();const spaceId=String(createdData.id);
+      const published=await admin({action:"publishProfile",id:spaceId,expectedGeneration:1,
+        profile:{name:"Asistente ejemplo",tone:"Amable",instructions:"Información propia",escalationRules:"",greeting:"",role:"Información",tools:[]}});
+      expect(published.status).toBe(200);
+      expect((await admin({action:"status",id:spaceId,expectedGeneration:2,status:"active"})).status).toBe(200);
+      const limits=await admin({action:"limits",id:spaceId,expectedGeneration:3,limits:{
+        maxDurationSeconds:900,maxIdleSeconds:300,maxConcurrentSessions:10,maxSessionsStarted:20,
+        maxInboundMessages:10,maxAssistantResponses:10,maxProviderCalls:10,budgetMicroUsd:"1000",sessionBudgetMicroUsd:"100",
+        windowStart:new Date(Date.now()-86400000).toISOString(),windowEnd:new Date(Date.now()+86400000).toISOString(),enabled:true}});
+      expect(limits.status).toBe(200);
+      const [createdProfile]=await sql`select current_profile_version_id from demo_space where id=${spaceId}`;
+      const profileId=String(createdProfile!.current_profile_version_id);
       await sql`update demo_limits set max_concurrent_sessions=10,max_sessions_started=20,max_inbound_messages=10 where id='global'`;
       const sessions: string[]=[];
       for (const suffix of ["71","72"]) {
@@ -477,15 +486,15 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status,updated_at)
           values(${randomUUID()},${org},${conv},${out},${cuenta},${thread},${'offer-'+suffix},'completado',clock_timestamp()-interval '2 seconds')`;
         if (suffix === "71") {
-          await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"disabled"'::jsonb) where id='auto-space'`;
+          await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"disabled"'::jsonb) where id=${spaceId}`;
           const denied=evento("ACEPTO DEMO",{phone:number,bsuid:null});denied.conversation.id=thread;denied.message.conversationId=thread;
           await enviar(denied);
           const [result]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${denied.id}`;
           expect(result!.result).toBe("consent_unverified");
-          await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"automatic"'::jsonb) where id='auto-space'`;
+          await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"automatic"'::jsonb) where id=${spaceId}`;
           const hash=createHmac("sha256",Buffer.alloc(32)).update(JSON.stringify(["demo-phone:v1",org,number])).digest("hex");
           await sql`insert into demo_authorization(id,organization_id,space_id,channel,canonical_phone,phone_lookup,phone_suffix,state,created_by)
-            values('auto-revoked',${org},'auto-space','whatsapp','{}'::jsonb,${hash},'0071','revoked',${owner})`;
+            values('auto-revoked',${org},${spaceId},'whatsapp','{}'::jsonb,${hash},'0071','revoked',${owner})`;
           const revoked=evento("ACEPTO DEMO",{phone:number,bsuid:null});revoked.conversation.id=thread;revoked.message.conversationId=thread;
           await enviar(revoked);
           const [revokedResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${revoked.id}`;
@@ -497,11 +506,11 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         const [acceptResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${accept.id}`;
         expect(acceptResult?.result).toBe("linked");
         const [session]=await sql`select id,profile_version_id from demo_session where organization_id=${org} and conversation_id=${conv} and state='active'`;
-        expect(session?.profile_version_id).toBe("auto-profile");sessions.push(session!.id);
+        expect(session?.profile_version_id).toBe(profileId);sessions.push(session!.id);
       }
       expect(new Set(sessions).size).toBe(2);
       const [audits]=await sql`select count(*)::int as n from demo_admin_audit
-        where organization_id=${org} and space_id='auto-space' and action='automatic_authorization_granted'`;
+        where organization_id=${org} and space_id=${spaceId} and action='automatic_authorization_granted'`;
       expect(audits!.n).toBe(2);
     } finally { vi.unstubAllEnvs(); }
   }, 30000);

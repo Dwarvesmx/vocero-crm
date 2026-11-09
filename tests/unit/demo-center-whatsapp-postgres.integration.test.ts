@@ -240,6 +240,18 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         values(${msg},${org},${conv!.id},${source!.payload.message.platformMessageId},'in','text','Solicito una demo','delivered',clock_timestamp())`;
       await sql`insert into dispatch(id,organization_id,conversation_id,status,message_ids,not_before,first_message_at,last_message_at)
         values(${dispatch},${org},${conv!.id},'entregado',${JSON.stringify([msg])}::jsonb,clock_timestamp(),clock_timestamp(),clock_timestamp())`;
+      const tracedSend = () => encolarEnvioWhatsAppZernio({organizationId:org,conversationId:conv!.id,accountRef:cuenta,
+        threadRef:hilo,text:"Respuesta comercial trazada",requestKey:"nea:trace-test",aiGenerated:true,sourceDispatchId:dispatch});
+      const tracedId=await tracedSend();
+      expect(await tracedSend()).toBe(tracedId);
+      await expect(encolarEnvioWhatsAppZernio({organizationId:org,conversationId:conv!.id,accountRef:cuenta,
+        threadRef:hilo,text:"Respuesta comercial trazada",requestKey:"nea:trace-test",aiGenerated:true,sourceDispatchId:"otro-despacho"})).rejects.toThrow();
+      await expect(encolarEnvioWhatsAppZernio({organizationId:org,conversationId:conv!.id,accountRef:cuenta,
+        threadRef:hilo,text:"Otro origen",requestKey:"nea:wrong-source",aiGenerated:true,sourceDispatchId:"otro-despacho"})).rejects.toThrow();
+      const [trace]=await sql`select source_dispatch_id,commercial_route_generation from zernio_whatsapp_outbox where message_id=${tracedId}`;
+      expect(trace?.source_dispatch_id).toBe(dispatch);
+      expect(trace?.commercial_route_generation).not.toBeNull();
+      await sql`update zernio_whatsapp_outbox set status='cancelado' where message_id=${tracedId}`;
       const offer = (sector: string, apiKey = process.env.BOT_API_KEY!, conversationId = conv!.id) => OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer", {
         method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey },
         body: JSON.stringify({ contractVersion: 1, conversationId, dispatchId: dispatch, sector }),
@@ -268,7 +280,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect(notYet!.mode).toBe("commercial");
       const outbound = randomUUID();
       await sql`insert into message(id,organization_id,conversation_id,direction,type,text,status)
-        values(${outbound},${org},${conv!.id},'out','text',${data.message},'sent')`;
+        values(${outbound},${org},${conv!.id},'out','text',${data.message},'delivered')`;
       await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status,updated_at)
         values(${randomUUID()},${org},${conv!.id},${outbound},${cuenta},${hilo},'fixture-commercial-offer','completado',clock_timestamp()-interval '2 seconds')`;
       expect((await enviar(evento("ACEPTO DEMO"), false)).status).toBe(401);
@@ -322,6 +334,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect(efectos.avisos).toBe(1);
       const [startStatus] = await sql`select status from zernio_whatsapp_outbox where id=${start!.id}`;
       expect(startStatus!.status).toBe("completado");
+      await sql`update message set status='delivered' where id=(select message_id from zernio_whatsapp_outbox where id=${start!.id})`;
       await sql`update demo_whatsapp_link set linked_at=clock_timestamp()-interval '3 seconds' where external_session_id=${linked!.id}`;
       await expect(encolarEnvioWhatsAppZernio({ organizationId: org, conversationId: conv!.id, accountRef: cuenta,
         threadRef: hilo, text: "No debe entrar al canal demo", requestKey: "commercial-blocked" })).rejects.toThrow();
@@ -334,6 +347,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       const demoPayload = await construirDespachoWhatsAppDemo(demoJob!);
       expect(demoPayload?.demo.scope.spaceId).toBe("pizza");
       await consumirEnNea(demoPayload!);
+      await sql`update message set status='delivered' where organization_id=${org} and demo_session_id=${linked!.id} and direction='out' and status='sent'`;
       const [paid] = await sql`select status,actual_amount from demo_usage_operation where operation_key=${demoJob!.id}`;
       expect(paid).toMatchObject({ status: "settled", actual_amount: "5" });
       await marcarEntregado(demoJob!);
@@ -363,10 +377,18 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       expect(endStatus!.status).toBe("completado");
       const [commercialControl] = await sql`select count(*)::int as n from message where scope_kind='commercial' and text in ('ACEPTO DEMO','TERMINAR DEMO')`;
       expect(commercialControl!.n).toBe(0);
-      await sql`update dispatch set updated_at=clock_timestamp()-interval '25 hours' where id=${dispatch}`;
+      const legacy=randomUUID();
+      await sql`insert into dispatch(id,organization_id,conversation_id,status,message_ids,not_before,first_message_at,last_message_at)
+        values(${legacy},${org},${conv!.id},'entregado','[]'::jsonb,clock_timestamp(),clock_timestamp(),clock_timestamp())`;
+      await expect(restituirWhatsApp(actor, "pizza", linked!.web_session_id, blocked!.generation)).rejects.toMatchObject({code:"thread_busy"});
+      await sql`update dispatch set status='descartado' where id=${legacy}`;
       await restituirWhatsApp(actor, "pizza", linked!.web_session_id, blocked!.generation);
       const [restored] = await sql`select mode from demo_identity_route where organization_id=${org}`;
       expect(restored!.mode).toBe("commercial");
+      await expect(encolarEnvioWhatsAppZernio({organizationId:org,conversationId:conv!.id,accountRef:cuenta,
+        threadRef:hilo,text:"Respuesta antigua",requestKey:"nea:late",aiGenerated:true,sourceDispatchId:dispatch})).rejects.toThrow();
+      await expect(encolarEnvioWhatsAppZernio({organizationId:org,conversationId:conv!.id,accountRef:cuenta,
+        threadRef:hilo,text:"Respuesta sin origen",requestKey:"nea:legacy",aiGenerated:true})).rejects.toThrow();
       // Recrear un vencimiento exclusivamente en la base descartable para probar el barrido.
       await sql`update demo_session set state='active',ended_at=null,expires_at=clock_timestamp()-interval '1 second' where id=${linked!.id}`;
       await sql`update demo_identity_route set mode='demo',session_id=${linked!.id},
@@ -377,6 +399,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         where s.id=${linked!.id}`;
       expect(expired).toMatchObject({ state: "expired", mode: "blocked", blocked_reason: "session_deadline" });
       await sql`update zernio_whatsapp_outbox set status='completado' where id=${end!.id}`;
+      await sql`update message set status='sent' where id=(select message_id from zernio_whatsapp_outbox where id=${start!.id})`;
       await caducarDemosConversacionales();
       const [stillBlocked]=await sql`select mode from demo_identity_route where organization_id=${org}`;
       expect(stillBlocked!.mode).toBe("blocked");
@@ -435,6 +458,104 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       const [audits] = await sql`select count(*)::int as n from demo_admin_audit where organization_id=${org}
         and action='whatsapp_revoked' and target_id=${linked!.id}`;
       expect(audits!.n).toBe(1);
+      // Una autorización temporal revocada no invalida el permiso piloto persistente.
+      await sql`update zernio_whatsapp_outbox set status='completado' where id=${end!.id}`;
+      const [adminRoute]=await sql`select generation from demo_identity_route where organization_id=${org}`;
+      await restituirWhatsApp(actor,"pizza",linked!.web_session_id,adminRoute!.generation);
+      await new Promise(resolve => setTimeout(resolve, 1100));
+      await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"automatic"'::jsonb) where id='pizza'`;
+      const [revision]=await sql`select generation from demo_space where organization_id=${org} and id='pizza'`;
+      const pilotResponse=await ADMIN_SPACE(new Request("http://127.0.0.1/api/demo-center",{method:"POST",
+        headers:{"content-type":"application/json"},body:JSON.stringify({action:"pilotAllow",id:"pizza",
+          expectedGeneration:revision!.generation,phone:"+"+phone})}));
+      expect(pilotResponse.status).toBe(200);
+      vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT","true");
+      const again=evento("Quiero otra demostración");
+      await enviar(again);
+      await sql`update webhook_event set status='procesado' where payload->>'id'=${again.id}`;
+      const againDispatch=randomUUID();
+      const [againMsgRow]=await sql`insert into message(id,organization_id,conversation_id,wa_message_id,direction,type,text,status,wa_timestamp)
+        values(${randomUUID()},${org},${conv!.id},${again.message.platformMessageId},'in','text','Quiero otra demostración','delivered',clock_timestamp())
+        on conflict(wa_message_id) do update set status=message.status returning id`;
+      const againMsg=String(againMsgRow!.id);
+      await sql`insert into dispatch(id,organization_id,conversation_id,status,message_ids,not_before,first_message_at,last_message_at)
+        values(${againDispatch},${org},${conv!.id},'entregado',${JSON.stringify([againMsg])}::jsonb,clock_timestamp(),clock_timestamp(),clock_timestamp())`;
+      const againCommercial=await encolarEnvioWhatsAppZernio({organizationId:org,conversationId:conv!.id,accountRef:cuenta,
+        threadRef:hilo,text:"Oferta trazada",requestKey:"nea:second-trace",aiGenerated:true,sourceDispatchId:againDispatch});
+      await sql`update zernio_whatsapp_outbox set status='cancelado' where message_id=${againCommercial}`;
+      const againResponse=await OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer",{method:"POST",
+        headers:{"content-type":"application/json","x-api-key":process.env.BOT_API_KEY!},
+        body:JSON.stringify({contractVersion:1,conversationId:conv!.id,dispatchId:againDispatch,sector:"NOVA"})}));
+      if (againResponse.status !== 200) throw Error(JSON.stringify(await againResponse.json()));
+      const againOffer=await againResponse.json();
+      const againOut=randomUUID();
+      await sql`insert into message(id,organization_id,conversation_id,direction,type,text,status)
+        values(${againOut},${org},${conv!.id},'out','text',${againOffer.message},'delivered')`;
+      await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status,updated_at)
+        values(${randomUUID()},${org},${conv!.id},${againOut},${cuenta},${hilo},'fixture-second-offer','completado',clock_timestamp()-interval '2 seconds')`;
+      const againConsent=evento("ACEPTO DEMO");
+      await enviar(againConsent);
+      const [againResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${againConsent.id}`;
+      expect(againResult?.result).toBe("linked");
+      const [againSession]=await sql`select id,profile_version_id from demo_session where organization_id=${org}
+        and conversation_id=${conv!.id} and state='active' and kind='external'`;
+      expect(againSession?.id).not.toBe(linked!.id);
+      expect(againSession?.profile_version_id).toBe(linked!.profile_version_id);
+      expect(await construirDespachoWhatsAppDemo(demoJob!)).toBeNull();
+      const [historical]=await sql`select state from demo_authorization where id=${authorized!.id}`;
+      expect(historical?.state).toBe("revoked");
+      await new Promise(resolve => setTimeout(resolve, 1100));
+      const againQuestion=evento("¿Qué pizza tienen?");
+      await enviar(againQuestion);
+      const [againQuestionResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${againQuestion.id}`;
+      expect(againQuestionResult?.result).toBe("demo");
+      const [againJob]=await tomarPendientes(1);
+      expect(againJob?.demoSessionId).toBe(againSession!.id);
+      const againPayload=await construirDespachoWhatsAppDemo(againJob!);
+      await consumirEnNea(againPayload!);
+      const [againPaid]=await sql`select status from demo_usage_operation where operation_key=${againJob!.id} and session_id=${againSession!.id}`;
+      expect(againPaid?.status).toBe("settled");
+      await marcarEntregado(againJob!);
+      const [againStart]=await sql`select id from zernio_whatsapp_outbox where request_key=${"demo-notice:"+againSession!.id+":started"}`;
+      await liberarSalidaZernio(againStart!.id);
+      const finished=evento("TERMINAR DEMO");
+      await enviar(finished);
+      const [againEnd]=await sql`select id from zernio_whatsapp_outbox where request_key=${"demo-notice:"+againSession!.id+":ended"}`;
+      expect(againEnd).toBeTruthy();
+      await liberarSalidaZernio(againEnd!.id);
+      await sql`update message set status='delivered' where organization_id=${org} and demo_session_id=${againSession!.id}
+        and direction='out' and scope_kind='demo' and status='sent'`;
+      await caducarDemosConversacionales();
+      const [automaticReturn]=await sql`select mode from demo_identity_route where organization_id=${org}`;
+      expect(automaticReturn?.mode).toBe("commercial");
+      await new Promise(resolve => setTimeout(resolve, 1100));
+      const third=evento("Quiero probar otra vez");
+      await enviar(third);
+      await sql`update webhook_event set status='procesado' where payload->>'id'=${third.id}`;
+      const thirdDispatch=randomUUID();
+      const [thirdMsgRow]=await sql`insert into message(id,organization_id,conversation_id,wa_message_id,direction,type,text,status,wa_timestamp)
+        values(${randomUUID()},${org},${conv!.id},${third.message.platformMessageId},'in','text','Quiero probar otra vez','delivered',clock_timestamp())
+        on conflict(wa_message_id) do update set status=message.status returning id`;
+      const thirdMsg=String(thirdMsgRow!.id);
+      await sql`insert into dispatch(id,organization_id,conversation_id,status,message_ids,not_before,first_message_at,last_message_at)
+        values(${thirdDispatch},${org},${conv!.id},'entregado',${JSON.stringify([thirdMsg])}::jsonb,clock_timestamp(),clock_timestamp(),clock_timestamp())`;
+      const thirdResponse=await OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer",{method:"POST",
+        headers:{"content-type":"application/json","x-api-key":process.env.BOT_API_KEY!},
+        body:JSON.stringify({contractVersion:1,conversationId:conv!.id,dispatchId:thirdDispatch,sector:"NOVA"})}));
+      expect(thirdResponse.status).toBe(200);
+      const thirdOffer=await thirdResponse.json(), thirdOut=randomUUID();
+      await sql`insert into message(id,organization_id,conversation_id,direction,type,text,status)
+        values(${thirdOut},${org},${conv!.id},'out','text',${thirdOffer.message},'delivered')`;
+      await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status,updated_at)
+        values(${randomUUID()},${org},${conv!.id},${thirdOut},${cuenta},${hilo},'fixture-third-offer','completado',clock_timestamp()-interval '2 seconds')`;
+      const thirdConsent=evento("ACEPTO DEMO");
+      await enviar(thirdConsent);
+      const [thirdResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${thirdConsent.id}`;
+      expect(thirdResult?.result).toBe("linked");
+      const [thirdSession]=await sql`select id,profile_version_id from demo_session where organization_id=${org}
+        and conversation_id=${conv!.id} and state='active' and kind='external'`;
+      expect(thirdSession?.id).not.toBe(againSession!.id);
+      expect(thirdSession?.profile_version_id).toBe(againSession!.profile_version_id);
     } finally { vi.unstubAllEnvs(); }
   }, 60000);
 
@@ -461,8 +582,10 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       const profileId=String(createdProfile!.current_profile_version_id);
       await sql`update demo_limits set max_concurrent_sessions=10,max_sessions_started=20,max_inbound_messages=10 where id='global'`;
       const sessions: string[]=[];
+      let generation=4;
       for (const suffix of ["71","72"]) {
         const number="5255112233"+suffix, thread="auto-thread-"+suffix, conv="auto-conv-"+suffix, contact="auto-contact-"+suffix;
+        expect((await admin({action:"pilotAllow",id:spaceId,expectedGeneration:generation++,phone:"+"+number})).status).toBe(200);
         const incoming=evento("Quiero una demo",{phone:number,bsuid:null});
         incoming.conversation.id=thread; incoming.message.conversationId=thread;
         await enviar(incoming);
@@ -474,6 +597,14 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
           values(${msg},${org},${conv},${incoming.message.platformMessageId},'in','text','Quiero una demo','delivered',clock_timestamp())`;
         await sql`insert into dispatch(id,organization_id,conversation_id,status,message_ids,not_before,first_message_at,last_message_at)
           values(${dispatch},${org},${conv},'entregado',${JSON.stringify([msg])}::jsonb,clock_timestamp(),clock_timestamp(),clock_timestamp())`;
+        if (suffix === "72") {
+          vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "true");
+          const denied=await OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer",{method:"POST",
+            headers:{"content-type":"application/json","x-api-key":process.env.BOT_API_KEY!},
+            body:JSON.stringify({contractVersion:1,conversationId:conv,dispatchId:dispatch,sector:"otro giro"})}));
+          expect(denied.status).toBe(403);
+          vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "false");
+        }
         const resp=await OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer",{method:"POST",
           headers:{"content-type":"application/json","x-api-key":process.env.BOT_API_KEY!},
           body:JSON.stringify({contractVersion:1,conversationId:conv,dispatchId:dispatch,sector:"otro giro"})}));
@@ -482,7 +613,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         const [before]=await sql`select count(*)::int as n from demo_session where organization_id=${org} and conversation_id=${conv}`;
         expect(before!.n).toBe(0);
         const out=randomUUID();
-        await sql`insert into message(id,organization_id,conversation_id,direction,type,text,status) values(${out},${org},${conv},'out','text',${offer.message},'sent')`;
+        await sql`insert into message(id,organization_id,conversation_id,direction,type,text,status) values(${out},${org},${conv},'out','text',${offer.message},'delivered')`;
         await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status,updated_at)
           values(${randomUUID()},${org},${conv},${out},${cuenta},${thread},${'offer-'+suffix},'completado',clock_timestamp()-interval '2 seconds')`;
         if (suffix === "71") {
@@ -495,11 +626,13 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
           const hash=createHmac("sha256",Buffer.alloc(32)).update(JSON.stringify(["demo-phone:v1",org,number])).digest("hex");
           await sql`insert into demo_authorization(id,organization_id,space_id,channel,canonical_phone,phone_lookup,phone_suffix,state,created_by)
             values('auto-revoked',${org},${spaceId},'whatsapp','{}'::jsonb,${hash},'0071','revoked',${owner})`;
+          const [pilot]=await sql`select id from demo_pilot_participant where organization_id=${org} and space_id=${spaceId} and phone_lookup=${hash}`;
+          expect((await admin({action:"pilotBlock",id:spaceId,expectedGeneration:generation++,participantId:pilot!.id})).status).toBe(200);
           const revoked=evento("ACEPTO DEMO",{phone:number,bsuid:null});revoked.conversation.id=thread;revoked.message.conversationId=thread;
           await enviar(revoked);
           const [revokedResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${revoked.id}`;
           expect(revokedResult!.result).toBe("consent_unverified");
-          await sql`delete from demo_authorization where id='auto-revoked'`;
+          expect((await admin({action:"pilotUnblock",id:spaceId,expectedGeneration:generation++,participantId:pilot!.id})).status).toBe(200);
         }
         const accept=evento("ACEPTO DEMO",{phone:number,bsuid:null});accept.conversation.id=thread;accept.message.conversationId=thread;
         await enviar(accept);await enviar({...accept,id:randomUUID()});
@@ -507,6 +640,11 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
         expect(acceptResult?.result).toBe("linked");
         const [session]=await sql`select id,profile_version_id from demo_session where organization_id=${org} and conversation_id=${conv} and state='active'`;
         expect(session?.profile_version_id).toBe(profileId);sessions.push(session!.id);
+        const [participant]=await sql`select id from demo_pilot_participant where organization_id=${org} and space_id=${spaceId} and phone_suffix=${number.slice(-4)}`;
+        const activeBlock=await admin({action:"pilotBlock",id:spaceId,expectedGeneration:generation,participantId:participant!.id});
+        expect(activeBlock.status).toBe(409);
+        expect((await activeBlock.json()).error.code).toBe("session_active");
+        vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT", "false");
       }
       expect(new Set(sessions).size).toBe(2);
       const [audits]=await sql`select count(*)::int as n from demo_admin_audit

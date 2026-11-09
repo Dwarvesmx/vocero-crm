@@ -114,9 +114,13 @@ export async function restituirWhatsApp(actor: {organizationId: string; userId: 
     const [conv] = await sql`select id from conversation where organization_id=${org} and id=${r.conversation_id} for update`;
     if (!conv) throw new SimulatorError("not_found", 404);
     const [trabajo] = await sql`select 1 from zernio_whatsapp_outbox where organization_id=${org} and conversation_id=${conv.id}
-      and status in ('retenido','iniciado','incierto')
+      and status in ('pendiente','procesando','retenido','iniciado','incierto')
+      union all select 1 from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
+      where j.organization_id=${org} and j.conversation_id=${conv.id} and j.status='completado'
+        and m.status not in ('delivered','read','failed')
       union all select 1 from dispatch where organization_id=${org} and conversation_id=${conv.id}
-      and (status in ('pendiente','en_vuelo') or (scope_kind='commercial' and status='entregado' and updated_at>clock_timestamp()-interval '24 hours'))
+      and (status in ('pendiente','en_vuelo') or (scope_kind='commercial' and status='entregado'
+        and commercial_trace_generation is null and updated_at>clock_timestamp()-interval '24 hours'))
       union all select 1 from demo_usage_operation o join demo_session s on (s.organization_id,s.id)=(o.organization_id,o.session_id)
       where o.organization_id=${org} and s.conversation_id=${conv.id} and o.status in ('reserved','uncertain') limit 1`;
     if (trabajo) throw new SimulatorError("thread_busy");

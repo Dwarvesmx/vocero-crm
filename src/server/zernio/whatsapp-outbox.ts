@@ -14,6 +14,7 @@ const MAX_INTENTOS = 6;
 const MAX_EDAD_MS = 23 * 60 * 60 * 1000;
 type Job = typeof schema.zernioWhatsappOutbox.$inferSelect;
 const g = globalThis as typeof globalThis & { __zernioWaTimer?: ReturnType<typeof setInterval> };
+export class StaleCommercialDispatchError extends Error {}
 
 /** Reintentos seguros con la MISMA clave, antes de que venza en Zernio. */
 export function politicaEnvioZernio(status: number, attempts: number, edadMs: number) {
@@ -24,7 +25,7 @@ export function politicaEnvioZernio(status: number, attempts: number, edadMs: nu
 
 export async function encolarEnvioWhatsAppZernio(input: {
   organizationId: string; conversationId: string; accountRef: string;
-  threadRef: string; text: string; requestKey: string; aiGenerated?: boolean; handoffReason?: string;
+  threadRef: string; text: string; requestKey: string; aiGenerated?: boolean; handoffReason?: string; sourceDispatchId?: string;
 }) {
   const db = getDb();
   const buscar = async () => (await db.select({ job: schema.zernioWhatsappOutbox, text: schema.message.text, scope: schema.message.scopeKind, aiGenerated: schema.message.aiGenerated })
@@ -34,6 +35,7 @@ export async function encolarEnvioWhatsAppZernio(input: {
     if (previo.scope && previo.scope!=="commercial")throw new Error("Solicitud de otro ámbito");
     if (previo.job.conversationId !== input.conversationId || previo.text !== input.text ||
         previo.job.accountRef !== input.accountRef || previo.job.threadRef !== input.threadRef ||
+        (previo.job.sourceDispatchId ?? null) !== (input.sourceDispatchId ?? null) ||
         Boolean(previo.aiGenerated) !== Boolean(input.aiGenerated) || (previo.job.handoffReason ?? null) !== (input.handoffReason ?? null)) {
       throw new Error("La clave ya corresponde a otra solicitud");
     }
@@ -43,6 +45,8 @@ export async function encolarEnvioWhatsAppZernio(input: {
   if (previo) return validar(previo);
   const messageId = newId("message");
   try { await db.transaction(async (tx) => {
+    // Mantiene el mismo orden que el cambio de ruta y la restitución.
+    await tx.execute(sql`select id from organization where id=${input.organizationId} for update`);
     const [conv] = await tx.select().from(schema.conversation).where(and(eq(schema.conversation.id, input.conversationId), eq(schema.conversation.organizationId, input.organizationId))).for("update");
     if (!conv) throw new Error("Conversación no disponible");
     const blocked = await tx.execute(sql`select 1 from demo_whatsapp_link l
@@ -50,7 +54,31 @@ export async function encolarEnvioWhatsAppZernio(input: {
       join demo_identity_route r on r.organization_id=l.organization_id and r.channel='whatsapp' and r.identity_lookup=l.phone_lookup
       where s.organization_id=${input.organizationId} and s.conversation_id=${input.conversationId}
       and r.mode<>'commercial' limit 1`);
-    if (blocked.length) throw new Error("Conversación en demostración o cuarentena");
+    if (blocked.length) {
+      if (input.aiGenerated) throw new StaleCommercialDispatchError("Conversación en demostración o cuarentena");
+      throw new Error("Conversación en demostración o cuarentena");
+    }
+    const routes = await tx.execute(sql`select r.generation,r.blocked_since,r.mode from demo_whatsapp_link l
+      join demo_session s on (s.organization_id,s.id)=(l.organization_id,l.external_session_id)
+      join demo_identity_route r on r.organization_id=l.organization_id and r.channel='whatsapp' and r.identity_lookup=l.phone_lookup
+      where s.organization_id=${input.organizationId} and s.conversation_id=${input.conversationId}
+      order by l.linked_at desc limit 1 for update of r`);
+    const route = routes[0];
+    if (input.aiGenerated && route && !input.sourceDispatchId) throw new StaleCommercialDispatchError("Falta el despacho de origen");
+    let traceGeneration: number | null = null;
+    if (input.aiGenerated && input.sourceDispatchId) {
+      const source = await tx.execute(sql`select d.id,d.commercial_trace_generation from dispatch d
+        where d.organization_id=${input.organizationId} and d.conversation_id=${input.conversationId}
+          and d.id=${input.sourceDispatchId} and d.scope_kind='commercial' and d.status in ('en_vuelo','entregado')
+          and (${route?.blocked_since ?? null}::timestamptz is null or d.first_message_at > ${route?.blocked_since ?? null}::timestamptz)
+        for update`);
+      if (!source.length) throw new StaleCommercialDispatchError("Despacho de origen no válido o anterior al corte");
+      traceGeneration = route ? Number(route.generation) : 0;
+      if (source[0]!.commercial_trace_generation !== null && Number(source[0]!.commercial_trace_generation) !== traceGeneration)
+        throw new StaleCommercialDispatchError("Despacho de otra generación");
+      await tx.execute(sql`update dispatch set commercial_trace_generation=${traceGeneration} where id=${input.sourceDispatchId}
+        and organization_id=${input.organizationId} and conversation_id=${input.conversationId}`);
+    }
     if (input.aiGenerated && (!conv.aiEnabled || conv.handoffAt || conv.handoffPendingMessageId))
       throw new Error("Atención humana pendiente o activa");
     await tx.insert(schema.message).values({ id: messageId, organizationId: input.organizationId,
@@ -59,6 +87,7 @@ export async function encolarEnvioWhatsAppZernio(input: {
     await tx.insert(schema.zernioWhatsappOutbox).values({ id: newId("dispatch"),
       organizationId: input.organizationId, conversationId: input.conversationId, messageId,
       accountRef: input.accountRef, threadRef: input.threadRef, requestKey: input.requestKey,
+      sourceDispatchId: input.sourceDispatchId, commercialRouteGeneration: traceGeneration,
       // Se registra la intención sin habilitar el transporte automático.
       status: input.aiGenerated ? "retenido" : "pendiente", handoffReason: input.aiGenerated ? input.handoffReason : null });
     if (input.aiGenerated && input.handoffReason) await tx.update(schema.conversation).set({ handoffPendingMessageId: messageId }).where(eq(schema.conversation.id, input.conversationId));

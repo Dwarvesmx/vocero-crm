@@ -583,6 +583,8 @@ export const zernioWhatsappOutbox = pgTable("zernio_whatsapp_outbox", {
   accountRef: text("account_ref").notNull(),
   threadRef: text("thread_ref").notNull(),
   requestKey: text("request_key").notNull(),
+  sourceDispatchId: text("source_dispatch_id"),
+  commercialRouteGeneration: integer("commercial_route_generation"),
   handoffReason: text("handoff_reason"),
   status: text("status", { enum: ["pendiente", "procesando", "completado", "fallido", "retenido", "iniciado", "cancelado", "incierto"] }).notNull().default("pendiente"),
   attempts: integer("attempts").notNull().default(0),
@@ -1311,6 +1313,7 @@ export const dispatch = pgTable(
     scopeKind: text("scope_kind").notNull().default("commercial"),
     demoSessionId: text("demo_session_id"),
     routeGeneration: integer("route_generation"),
+    commercialTraceGeneration: integer("commercial_trace_generation"),
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversation.id, { onDelete: "cascade" }),
@@ -1554,6 +1557,20 @@ export const demoAuthorization = pgTable("demo_authorization", {
   foreignKey({ columns: [t.organizationId,t.spaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
   uniqueIndex("demo_authorization_active_uq").on(t.organizationId,t.spaceId,t.channel,t.phoneLookup).where(sql`${t.state} = 'active'`),
   check("demo_authorization_state_ck",sql`${t.state} in ('active','revoked') and ${t.version} > 0`),
+]);
+
+// Permiso persistente de piloto, separado de los permisos de cada sesión.
+export const demoPilotParticipant = pgTable("demo_pilot_participant", {
+  id: demoId(), organizationId: demoOrg(), spaceId: demoSpaceId(),
+  channel: text("channel").notNull().default("whatsapp"),
+  phoneLookup: text("phone_lookup").notNull(), phoneSuffix: text("phone_suffix").notNull(),
+  state: text("state", { enum: ["allowed", "blocked"] }).notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id),
+  updatedAt: demoTime("updated_at").notNull().defaultNow(),
+}, t => [
+  foreignKey({ columns: [t.organizationId,t.spaceId], foreignColumns: [demoSpace.organizationId,demoSpace.id] }).onDelete("restrict"),
+  unique().on(t.organizationId,t.spaceId,t.channel,t.phoneLookup),
+  check("demo_pilot_participant_state_ck", sql`${t.channel} = 'whatsapp' and ${t.state} in ('allowed','blocked')`),
 ]);
 
 export const demoLimits = pgTable("demo_limits", {

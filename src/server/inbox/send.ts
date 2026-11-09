@@ -485,6 +485,7 @@ export async function sendText(input: {
   /** 039: id local del mensaje al que se responde citando. */
   replyToMessageId?: string;
   requestKey?: string;
+  sourceDispatchId?: string;
   handoffReason?: string;
 }): Promise<SendResult> {
   const target = await prepareSend(
@@ -521,6 +522,7 @@ export async function sendText(input: {
     const messageId = await encolarEnvioWhatsAppZernio({ organizationId: input.organizationId,
       conversationId: input.conversationId, accountRef: target.zernioWhatsapp.accountRef,
       threadRef: target.conversation.channelThreadRef!, text, requestKey: input.requestKey,
+      sourceDispatchId: input.sourceDispatchId,
       ...(input.aiGenerated ? { aiGenerated: true, handoffReason: input.handoffReason } : {}) });
     return { messageId, ...(input.handoffReason ? { handoffManaged: true } : {}) };
   }

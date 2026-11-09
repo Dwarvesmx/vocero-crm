@@ -33,6 +33,9 @@ export const adminCommand = z.discriminatedUnion("action", [
   z.object({ action: z.literal("authorize"), ...revision, phone: z.string().trim().regex(/^\+[1-9][0-9]{7,14}$/),
     expiresAt: z.string().datetime().nullable() }).strict(),
   z.object({ action: z.literal("revoke"), ...revision, authorizationId: z.string().min(1).max(128) }).strict(),
+  z.object({ action: z.literal("pilotAllow"), ...revision, phone: z.string().trim().regex(/^\+[1-9][0-9]{7,14}$/) }).strict(),
+  z.object({ action: z.literal("pilotBlock"), ...revision, participantId: z.string().min(1).max(128) }).strict(),
+  z.object({ action: z.literal("pilotUnblock"), ...revision, participantId: z.string().min(1).max(128) }).strict(),
   z.object({ action: z.literal("limits"), ...revision, limits: limitsInput }).strict(),
 
 ]);

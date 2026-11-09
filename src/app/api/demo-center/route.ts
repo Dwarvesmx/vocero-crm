@@ -32,6 +32,7 @@ export const POST = withAuth(async (session, req: Request) => {
     case "internal": return apiError(500, "internal", "No se pudo guardar la configuración.");
     case "missing": return apiError(404, "not_found", "Espacio no encontrado.");
     case "conflict": return apiError(409, "stale_version", "El espacio cambió. Actualiza los datos.");
+    case "session_active": return apiError(409, "session_active", "Finaliza la sesión activa antes de bloquear al participante.");
     case "profile_required": return apiError(422, "profile_required", "Publica un perfil antes de activar el espacio.");
     case "saved": return Response.json(result, { status: input.data.action === "create" ? 201 : 200 });
   }

@@ -34,8 +34,19 @@ export async function autorizarSalidaZernio(id: string) {
       and (r.mode is distinct from 'commercial' or r.blocked_since is null
         or ${conv?.lastInboundAt?.toISOString() ?? null}::timestamptz is null
         or ${conv?.lastInboundAt?.toISOString() ?? null}::timestamptz<=r.blocked_since) limit 1`);
+    const trace = await tx.execute(sql`select 1 from dispatch d where d.organization_id=${ref.organizationId}
+      and d.conversation_id=${ref.conversationId} and d.id=${job.sourceDispatchId}
+      and d.scope_kind='commercial' and d.commercial_trace_generation=${job.commercialRouteGeneration}
+      and ${job.commercialRouteGeneration} = coalesce((select r.generation from demo_whatsapp_link l
+        join demo_session s on (s.organization_id,s.id)=(l.organization_id,l.external_session_id)
+        join demo_identity_route r on r.organization_id=l.organization_id and r.channel='whatsapp' and r.identity_lookup=l.phone_lookup
+        where s.organization_id=${ref.organizationId} and s.conversation_id=${ref.conversationId}
+        order by l.linked_at desc limit 1),0)`);
+    const priorDemo = await tx.execute(sql`select 1 from demo_whatsapp_link l join demo_session s
+      on (s.organization_id,s.id)=(l.organization_id,l.external_session_id)
+      where s.organization_id=${ref.organizationId} and s.conversation_id=${ref.conversationId} limit 1`);
     const now = new Date();
-    const valid = !aislado.length && conv && profile?.enabled && conv.aiEnabled && !conv.handoffAt && !conv.isTest &&
+    const valid = !aislado.length && (job.sourceDispatchId ? trace.length > 0 : !priorDemo.length) && conv && profile?.enabled && conv.aiEnabled && !conv.handoffAt && !conv.isTest &&
       (job.handoffReason ? conv.handoffPendingMessageId === job.messageId : !conv.handoffPendingMessageId) && cred?.enabled && conv.channel === "whatsapp" && conv.channelThreadRef === job.threadRef && cred?.accountRef === job.accountRef &&
       msg?.aiGenerated && msg.origin === "ai" && msg.conversationId === conv.id && msg.text && job.requestKey.startsWith("nea:") &&
       conv.lastInboundAt && now.getTime() - conv.lastInboundAt.getTime() >= 0 &&

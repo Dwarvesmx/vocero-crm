@@ -1,13 +1,14 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import type { AdminActor, AdminCommand, GlobalCommand } from "../domain/contracts";
 
 import { encryptSecret } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
+import { telefonoWhatsApp } from "../domain/whatsapp";
 
-const { demoSpace, demoProfileVersion, demoAdminAudit, demoAuthorization, demoLimits } = schema;
+const { demoSpace, demoProfileVersion, demoAdminAudit, demoAuthorization, demoLimits, demoPilotParticipant } = schema;
 const authorizationScope = (org: string, id: string) =>
   scoped(demoAuthorization.organizationId, org, eq(demoAuthorization.spaceId, id));
 const limitsScope = (org: string, id: string) =>
@@ -24,7 +25,7 @@ export async function consultarEspacio(actor: AdminActor, id: string) {
   const [space] = await db.select().from(demoSpace).where(scope(actor.organizationId, id));
   if (!space) return null;
   const profileScope = scoped(demoProfileVersion.organizationId, actor.organizationId, eq(demoProfileVersion.spaceId, id));
-  const [profiles, audit, authorizations, limits] = await Promise.all([
+  const [profiles, audit, authorizations, limits, pilots] = await Promise.all([
     db.select().from(demoProfileVersion).where(profileScope).orderBy(desc(demoProfileVersion.version)).limit(25),
     db.select().from(demoAdminAudit)
       .where(scoped(demoAdminAudit.organizationId, actor.organizationId, eq(demoAdminAudit.spaceId, id)))
@@ -34,9 +35,11 @@ export async function consultarEspacio(actor: AdminActor, id: string) {
       createdBy: demoAuthorization.createdBy }).from(demoAuthorization)
       .where(authorizationScope(actor.organizationId, id)).orderBy(desc(demoAuthorization.createdAt)),
     db.select().from(demoLimits).where(limitsScope(actor.organizationId, id)),
+    db.select({ id: demoPilotParticipant.id, suffix: demoPilotParticipant.phoneSuffix, state: demoPilotParticipant.state })
+      .from(demoPilotParticipant).where(scoped(demoPilotParticipant.organizationId, actor.organizationId, eq(demoPilotParticipant.spaceId, id))),
   ]);
   const policy = limits[0];
-  return { space, profiles, audit, authorizations, limits: policy ? {
+  return { space, profiles, audit, authorizations, pilots, limits: policy ? {
     ...policy, budgetMicroUsd: String(policy.budgetMicroUsd),
     sessionBudgetMicroUsd: policy.sessionBudgetMicroUsd?.toString() ?? null,
   } : null };
@@ -45,6 +48,9 @@ export async function consultarEspacio(actor: AdminActor, id: string) {
 export async function guardarEspacio(actor: AdminActor, command: AdminCommand) {
   return getDb().transaction(async tx => {
     const { organizationId, userId } = actor;
+    // Serializa cambios del piloto con la selección y aceptación de ofertas.
+    await tx.select({ id: schema.organization.id }).from(schema.organization)
+      .where(eq(schema.organization.id, organizationId)).for("update");
     const id = command.action === "create" ? randomUUID() : command.id;
     let targetId = id;
     let priorVersion: number | null = null;
@@ -92,6 +98,44 @@ export async function guardarEspacio(actor: AdminActor, command: AdminCommand) {
         await tx.update(demoAuthorization).set({ state: "revoked", version: authorization.version + 1 })
           .where(scoped(demoAuthorization.organizationId, organizationId,
             eq(demoAuthorization.spaceId, id), eq(demoAuthorization.id, authorization.id)));
+        patch = {};
+      } else if (command.action === "pilotAllow") {
+        const normalizedPhone = telefonoWhatsApp(command.phone);
+        if (!normalizedPhone) return { outcome: "conflict" } as const;
+        const phoneLookup = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
+          .update(JSON.stringify(["demo-phone:v1", organizationId, normalizedPhone])).digest("hex");
+        const [existing] = await tx.select().from(demoPilotParticipant).where(scoped(demoPilotParticipant.organizationId,
+          organizationId, eq(demoPilotParticipant.spaceId, id), eq(demoPilotParticipant.channel, "whatsapp"),
+          eq(demoPilotParticipant.phoneLookup, phoneLookup))).for("update");
+        targetId = existing?.id ?? randomUUID();
+        if (existing) await tx.update(demoPilotParticipant).set({ state: "allowed", updatedAt: new Date() })
+          .where(scoped(demoPilotParticipant.organizationId, organizationId, eq(demoPilotParticipant.spaceId, id), eq(demoPilotParticipant.id, targetId)));
+        else await tx.insert(demoPilotParticipant).values({ id: targetId, organizationId, spaceId: id,
+          phoneLookup, phoneSuffix: command.phone.slice(-4), state: "allowed", createdBy: userId });
+        patch = {};
+      } else if (command.action === "pilotBlock") {
+        const [current] = await tx.select().from(demoPilotParticipant).where(scoped(demoPilotParticipant.organizationId,
+          organizationId, eq(demoPilotParticipant.spaceId, id), eq(demoPilotParticipant.id, command.participantId))).for("update");
+        if (!current) return { outcome: "missing" } as const;
+        const active = await tx.execute(sql`select 1 from demo_session s join demo_authorization a
+          on (a.organization_id,a.space_id,a.id)=(s.organization_id,s.space_id,s.authorization_id)
+          where s.organization_id=${organizationId} and s.space_id=${id} and s.state='active'
+            and s.kind='external' and a.channel='whatsapp' and a.phone_lookup=${current.phoneLookup} limit 1`);
+        // No anunciar un bloqueo efectivo mientras exista una sesión que sigue operando.
+        if (active.length) return { outcome: "session_active" } as const;
+        const [participant] = await tx.update(demoPilotParticipant).set({ state: "blocked", updatedAt: new Date() })
+          .where(scoped(demoPilotParticipant.organizationId, organizationId, eq(demoPilotParticipant.spaceId, id),
+            eq(demoPilotParticipant.id, command.participantId))).returning({ id: demoPilotParticipant.id });
+        if (!participant) return { outcome: "missing" } as const;
+        targetId = participant.id;
+        patch = {};
+      } else if (command.action === "pilotUnblock") {
+        const [participant] = await tx.update(demoPilotParticipant).set({ state: "allowed", updatedAt: new Date() })
+          .where(scoped(demoPilotParticipant.organizationId, organizationId, eq(demoPilotParticipant.spaceId, id),
+            eq(demoPilotParticipant.id, command.participantId), eq(demoPilotParticipant.state, "blocked")))
+          .returning({ id: demoPilotParticipant.id });
+        if (!participant) return { outcome: "missing" } as const;
+        targetId = participant.id;
         patch = {};
       } else if (command.action === "limits") {
         const [previous] = await tx.select().from(demoLimits).where(limitsScope(organizationId, id));

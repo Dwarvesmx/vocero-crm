@@ -33,6 +33,7 @@ async function vinculos(sql: TransactionSql, org: string, cuenta: string, hilo: 
 async function asignar(sql: TransactionSql, org: string, cuenta: string, evento: EventoWhatsAppZernio, challengeHash: string,
   persona: ReturnType<typeof identidad>, ahora: Date, oferta?: { metadata: Row }) {
   if (!canalDemoWhatsApp() || !permiteDespachoWhatsAppZernio(evento) || !persona.phone || !persona.lookup || !challengeHash) return;
+  await sql`select id from organization where id=${org} for update`;
   const hilo = evento.conversation.id;
   const [link] = await sql`select l.*,s.actor_user_id,s.expires_at as web_expiry,s.profile_version_id,p.current_profile_version_id
     from demo_whatsapp_link l join demo_session s on (s.organization_id,s.space_id,s.id)=(l.organization_id,l.space_id,l.web_session_id)
@@ -66,6 +67,9 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
     and scope_kind='commercial' and status in ('pendiente','en_vuelo')
     union all select 1 from zernio_whatsapp_outbox where organization_id=${org} and conversation_id=${conv.id}
     and status in ('pendiente','procesando','retenido','iniciado','incierto')
+    union all select 1 from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
+    where j.organization_id=${org} and j.conversation_id=${conv.id} and j.status='completado'
+      and m.scope_kind='commercial' and m.status not in ('delivered','read','failed')
     union all select 1 from webhook_event where organization_id=${org} and fuente='zernio_whatsapp'
     and payload->'conversation'->>'id'=${hilo} and payload->>'event'='message.received'
     and status in ('pendiente','en_proceso') limit 1`;
@@ -83,6 +87,9 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   }
   const phoneHash = createHmac("sha256", Buffer.from(getEnv().ENCRYPTION_KEY, "base64"))
     .update(JSON.stringify(["demo-phone:v1", org, persona.phone])).digest("hex");
+  const [pilotBlock] = await sql`select 1 from demo_pilot_participant where organization_id=${org}
+    and space_id=${link.space_id} and channel='whatsapp' and phone_lookup=${phoneHash} and state='blocked'`;
+  if (pilotBlock) throw new SimulatorError("authorization_unavailable", 403);
   let [existente] = await sql`select * from demo_authorization where organization_id=${org} and space_id=${link.space_id}
     and channel='whatsapp' and phone_lookup=${phoneHash} and state='active' for update`;
   // Una autorización revocada por el operador no se usa. Una invitación nueva es una autorización explícita distinta.

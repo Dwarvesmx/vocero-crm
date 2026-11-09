@@ -167,7 +167,7 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
               <select name="demoPolicy" className={inputStyle} defaultValue={(space?.visualIdentity as {demoPolicy?:string} | undefined)?.demoPolicy ?? "supervised"}>
                 <option value="disabled">Deshabilitado</option>
                 <option value="supervised">Supervisado: autorización administrativa previa</option>
-                <option value="automatic">Automático: identidad verificada y consentimiento</option>
+                <option value="automatic">Automático: piloto autorizado, identidad verificada y consentimiento</option>
               </select>
               <span className="block text-sm text-muted-foreground">Los límites, presupuestos, revocaciones y cuarentenas siguen vigentes.</span>
             </label>
@@ -274,6 +274,28 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
           <div role="tabpanel" id="panel-phones" aria-labelledby="tab-phones" hidden={active !== "phones"}>
           <section className="space-y-3 rounded-lg border p-4">
             <h2 id="telefonos" className="font-semibold">Teléfonos autorizados</h2>
+            <h3 className="font-medium">Participantes del piloto automático</h3>
+            <p className="text-sm text-muted-foreground">El acceso piloto es persistente; cada demostración sigue requiriendo consentimiento y respetando cuarentenas y límites.</p>
+            <form className="space-y-2" onSubmit={event => {
+              event.preventDefault();
+              void send({ action: "pilotAllow", id: space.id, expectedGeneration: space.generation,
+                phone: new FormData(event.currentTarget).get("phone") }, false, event.currentTarget, true);
+            }}>
+              <label className="block">Teléfono internacional<input className={inputStyle} type="tel" name="phone" required placeholder="+521234567890" maxLength={16} /></label>
+              <button className={buttonStyle} disabled={busy}>Autorizar piloto</button>
+            </form>
+            <ul className="space-y-2">{detail.pilots.map(item => <li key={item.id} className="flex items-center justify-between gap-2">
+              <span>•••• {item.suffix} · {item.state === "blocked" ? "Bloqueado" : "Piloto autorizado"}</span>
+              {item.state === "allowed" && <button type="button" className={buttonStyle} disabled={busy} onClick={() => {
+                if (window.confirm("¿Bloquear este participante del piloto?"))
+                  void send({ action: "pilotBlock", id: space.id, expectedGeneration: space.generation, participantId: item.id });
+              }}>Bloquear</button>}
+              {item.state === "blocked" && <button type="button" className={buttonStyle} disabled={busy} onClick={() => {
+                if (window.confirm("¿Levantar el bloqueo de este participante?"))
+                  void send({ action: "pilotUnblock", id: space.id, expectedGeneration: space.generation, participantId: item.id });
+              }}>Levantar bloqueo</button>}
+            </li>)}</ul>
+            <h3 className="font-medium">Autorizaciones temporales</h3>
             <form className="space-y-2" onSubmit={event => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);

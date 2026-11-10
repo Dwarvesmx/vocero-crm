@@ -100,4 +100,20 @@ Pendiente antes de activación: acreditar la reversión con el esquema real y re
 
 En General, «Automático para prospectos elegibles» usa los controles de IA del contacto y la conversación. «Piloto restringido» conserva el alcance del valor automático histórico. El catálogo se obtiene desde el despacho comercial firmado. El CRM vuelve a comprobar identidad, política y consentimiento antes de cambiar de ruta. El presupuesto y las cuotas conservan los controles existentes.
 
+### Recomendación de demos en el turno comercial
+
+IMPLEMENTADO LOCALMENTE en Nea. La herramienta de Lukas permite consultar el catálogo cuando el prospecto describe una necesidad concreta, aunque no pida una demo. Lukas puede ofrecer una opción publicada compatible por su identificador. Si el catálogo está vacío o el CRM rechaza la oferta, sigue atendiendo la consulta comercial. El cambio de asistente sigue sujeto al consentimiento del prospecto y a la política del CRM.
+
+PROBADO con 3 pruebas focalizadas de Nea. El turno de prueba con modelo y CRM controlados consulta el catálogo, selecciona un negocio por su identificador y emite una sola oferta con el texto de consentimiento del CRM. La prueba comprueba la ejecución de la herramienta. La selección con un modelo real y la aceptación por WhatsApp quedan pendientes.
+
+### Piloto conversacional y confirmaciones de WhatsApp
+
+El 2026-11-10 el piloto recibió la oferta formal de NOVA y envió el consentimiento. La oferta caducó sin mostrar una sesión WhatsApp vinculada. La causa de ese rechazo aún requiere evidencia del selector o de la suscripción activa de Zernio.
+
+IMPLEMENTADO LOCALMENTE: la configuración del webhook incorpora confirmaciones de entrega, lectura y fallo y conserva eventos existentes al actualizar. El selector sigue bloqueando el cambio de ámbito si una salida comercial continúa sin confirmación suficiente. «Actualizar uso» informa cuando la consulta termina, aunque los valores sigan iguales. Sin modificación del webhook activo ni despliegue.
+
+El operador guardó los cinco eventos. En un segundo intento, Zernio mostró eventos de lectura y recepción del consentimiento con HTTP 200. En el teléfono siguió sin verse el aviso de inicio. La evidencia no identifica el resultado interno del selector para ese consentimiento.
+
+PROBADO localmente con PostgreSQL 16 aislado y webhook firmado (3/3). Si el consentimiento válido encuentra el hilo ocupado, Vocero consulta el estado de salidas comerciales aceptadas que siguen en «Enviado» y tienen un identificador de proveedor. La consulta se limita a la cuenta y el hilo y ocurre fuera de la transacción. Solo aplica estados definitivos con identificador coincidente y revalida una vez el mismo consentimiento. El caso de regresión conserva el bloqueo sin evidencia y abre una sola sesión cuando llega una confirmación exacta. Typecheck y `git diff --check` aprobados. Pendiente publicar y validar la versión nueva por WhatsApp.
+
 Comprobado con TypeScript y la integración existente de PostgreSQL descartable y WhatsApp controlado (3/3). La aceptación real se realiza después de autorizar y desplegar las imágenes verificadas.

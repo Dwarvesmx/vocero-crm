@@ -37,8 +37,21 @@ describe("Configuración Zernio V1", () => {
  it("guarda cifrado por el servicio existente y siempre apagado", async () => { expect((await PUT(request("PUT", { accountRef: "modo", confirmation: "modo", enabled: true }))).status).toBe(200); expect(m.save).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, token: credential.token, secreto: credential.secreto })); expect(m.transport).not.toHaveBeenCalled(); });
  it("exige confirmación explícita de cuenta", async () => { expect((await PUT(request("PUT", { accountRef: "modo", confirmation: "" }))).status).toBe(422); });
  it("prueba conexión y webhook sin enviar ni registrar", async () => { expect((await POST(request("POST", { action: "test" }))).status).toBe(200); expect(m.transport).not.toHaveBeenCalled(); expect(m.save).not.toHaveBeenCalled(); });
- it("registra solo tras confirmación y reserva PostgreSQL", async () => { expect((await POST(request("POST", { action: "webhook", confirmation: "modo" }))).status).toBe(200); expect(m.lock).toHaveBeenCalled(); expect(m.transport).toHaveBeenCalledWith("/webhooks/settings", expect.objectContaining({ method: "POST", body: expect.objectContaining({ accountIds: ["modo"], events: ["message.received", "message.sent"] }) })); });
- it("actualiza el propio sin crear duplicados", async () => { m.webhooks.mockResolvedValue([{ _id: "wh-1", name: "Vocero WhatsApp org-modo", url: base + "/api/webhooks/zernio-whatsapp", accountIds: ["modo"] }]); await POST(request("POST", { action: "webhook", confirmation: "modo" })); expect(m.transport).toHaveBeenCalledWith("/webhooks/settings", expect.objectContaining({ method: "PUT", body: expect.objectContaining({ webhookId: "wh-1" }) })); });
+ it("registra solo tras confirmación y reserva PostgreSQL", async () => {
+   expect((await POST(request("POST", { action: "webhook", confirmation: "modo" }))).status).toBe(200);
+   expect(m.lock).toHaveBeenCalled();
+   expect(m.transport).toHaveBeenCalledWith("/webhooks/settings", expect.objectContaining({ method: "POST", body: expect.objectContaining({
+     accountIds: ["modo"], events: ["message.received", "message.sent", "message.delivered", "message.read", "message.failed"],
+   }) }));
+ });
+ it("actualiza el propio sin crear duplicados ni eliminar eventos existentes", async () => {
+   m.webhooks.mockResolvedValue([{ _id: "wh-1", name: "Vocero WhatsApp org-modo", url: base + "/api/webhooks/zernio-whatsapp",
+     accountIds: ["modo"], events: ["message.sent", "message.edited"] }]);
+   await POST(request("POST", { action: "webhook", confirmation: "modo" }));
+   expect(m.transport).toHaveBeenCalledWith("/webhooks/settings", expect.objectContaining({ method: "PUT", body: expect.objectContaining({
+     webhookId: "wh-1", events: ["message.received", "message.sent", "message.delivered", "message.read", "message.failed", "message.edited"],
+   }) }));
+ });
  it("no toca un webhook ajeno en la misma URL", async () => { m.webhooks.mockResolvedValue([{ _id: "otro", url: base + "/api/webhooks/zernio-whatsapp", accountIds: ["gh"] }]); expect((await POST(request("POST", { action: "webhook", confirmation: "modo" }))).status).toBe(409); expect(m.transport).not.toHaveBeenCalled(); });
  it("desconecta localmente sin llamadas externas", async () => { expect((await PATCH(request("PATCH", { enabled: false }))).status).toBe(200); expect(m.save).toHaveBeenCalledWith({ ...credential, enabled: false }); expect(m.transport).not.toHaveBeenCalled(); expect(m.accounts).not.toHaveBeenCalled(); });
  it("no repite un alta con resultado incierto tras reinicio", async () => { m.cred.mockResolvedValue({ ...credential, webhookPending: true }); const r = await POST(request("POST", { action: "webhook", confirmation: "modo" })); expect(r.status).toBe(409); expect(m.transport).not.toHaveBeenCalled(); });

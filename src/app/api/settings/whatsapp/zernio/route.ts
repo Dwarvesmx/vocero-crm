@@ -23,13 +23,14 @@ function origin(req: Request) {
   } catch { return false; }
 }
 const endpoint = () => `${process.env.APP_BASE_URL?.replace(/\/$/, "")}/api/webhooks/zernio-whatsapp`;
+const webhookEvents = ["message.received", "message.sent", "message.delivered", "message.read", "message.failed"];
 const owner = (role: string) => role === "owner";
 const unavailable = () => apiError(503, "zernio_unavailable", "Zernio no respondió. No se ha confirmado la operación; comprueba el estado antes de repetirla.");
 export const GET = withAuth(async session => {
   if (!owner(session.role)) return apiError(403, "forbidden", "Solo el propietario puede administrar Zernio");
   const c = await obtenerZernioWhatsAppPorOrg(session.organizationId, true);
   return Response.json({ connection: c ? { accountRef: c.accountRef, tokenLast4: c.token.slice(-4), enabled: c.enabled, webhookPending: c.webhookPending } : null,
-    available: process.env.ZERNIO_WHATSAPP_ENABLED === "true", webhookUrl: endpoint(), webhookEvents: ["message.received", "message.sent"] }, { headers: { "Cache-Control": "no-store" } });
+    available: process.env.ZERNIO_WHATSAPP_ENABLED === "true", webhookUrl: endpoint(), webhookEvents }, { headers: { "Cache-Control": "no-store" } });
 });
 export const PUT = withAuth(async (session, req: Request) => {
   if (!owner(session.role)) return apiError(403, "forbidden", "Solo el propietario puede administrar Zernio");
@@ -76,8 +77,9 @@ export const POST = withAuth(async (session, req: Request) => {
       if (fresh.webhookPending && !owned) return apiError(409, "webhook_uncertain", "Hay un registro anterior de resultado incierto. Comprueba su estado en Zernio antes de crear otro");
       // Se confirma fuera de la transacción de reserva para sobrevivir a timeout/reinicio.
       await getSql()`update zernio_whatsapp_credentials set webhook_pending=true where organization_id=${session.organizationId}`;
+      const events = [...new Set([...webhookEvents, ...(owned?.events ?? [])])];
       await zernioFetch("/webhooks/settings", { token: c.token, method: owned ? "PUT" : "POST", timeoutMs: 10000,
-        body: { ...(owned ? { webhookId: owned._id } : {}), name, url, secret: c.secreto, accountIds: [c.accountRef], events: ["message.received", "message.sent"], isActive: true } });
+        body: { ...(owned ? { webhookId: owned._id } : {}), name, url, secret: c.secreto, accountIds: [c.accountRef], events, isActive: true } });
       await sql`update zernio_whatsapp_credentials set webhook_pending=false where organization_id=${session.organizationId}`;
       return Response.json({ ok: true, created: !owned });
     });

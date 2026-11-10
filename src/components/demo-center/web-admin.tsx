@@ -92,8 +92,12 @@ export function InvitacionesDemoWeb({ spaceId }: { spaceId: string }) {
       <button className={boton} type="button" disabled={ocupado} onClick={async () => {
         setOcupado(true);
         setError("");
-        try { setEstado(await leer(spaceId)); }
-        catch (e) { setError((e as Error).message); }
+        setAviso("Consultando el uso…");
+        try {
+          setEstado(await leer(spaceId));
+          setAviso("Uso actualizado.");
+        }
+        catch (e) { setAviso(""); setError((e as Error).message); }
         finally { setOcupado(false); }
       }}>Actualizar uso</button>
     </div>

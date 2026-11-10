@@ -40,7 +40,7 @@ export async function enviarTextoWhatsAppZernio(input: {
 /** Consulta acotada al hilo/cuenta y al ID exacto ya confirmado; nunca asocia por texto.
  * Sin ID tras ACK perdido no existe correlación demostrada: conservar incertidumbre.
  */
-export async function consultarConfirmacionDemoZernio(input:{organizationId:string;accountRef:string;threadRef:string;requestKey:string;messageId:string|null}):Promise<{messageId:string;status:'sent'|'delivered'|'read'|'failed'}|null>{
+export async function consultarConfirmacionDemoZernio(input:{organizationId:string;accountRef:string;threadRef:string;requestKey:string;messageId:string|null}, consultaBreve = false):Promise<{messageId:string;status:'sent'|'delivered'|'read'|'failed'}|null>{
  if(!input.messageId)return null;
  const {obtenerZernioWhatsAppPorOrg}=await import("./whatsapp-credenciales");
  const cred=await obtenerZernioWhatsAppPorOrg(input.organizationId);
@@ -48,9 +48,9 @@ export async function consultarConfirmacionDemoZernio(input:{organizationId:stri
  const pageSchema=z.object({messages:z.array(z.object({id:z.string(),accountId:z.string(),conversationId:z.string(),platform:z.string(),direction:z.string(),deliveryStatus:z.string().nullable().optional()})),pagination:z.object({hasMore:z.boolean().optional(),nextCursor:z.string().nullable().optional()}).optional()});
  let cursor:string|undefined;
  try{
-  for(let page=0;page<3;page++){
+  for(let page=0;page<(consultaBreve ? 1 : 3);page++){
    const query=new URLSearchParams({accountId:input.accountRef,sortOrder:'desc',limit:'50'});if(cursor)query.set('cursor',cursor);
-   const data=pageSchema.safeParse(await zernioFetch(`/inbox/conversations/${encodeURIComponent(input.threadRef)}/messages?${query}`,{token:cred.token,method:'GET',timeoutMs:15000}));
+   const data=pageSchema.safeParse(await zernioFetch(`/inbox/conversations/${encodeURIComponent(input.threadRef)}/messages?${query}`,{token:cred.token,method:'GET',timeoutMs:consultaBreve ? 1500 : 15000}));
    if(!data.success)return null;
    const exact=data.data.messages.filter(m=>m.id===input.messageId&&m.accountId===input.accountRef&&m.conversationId===input.threadRef&&m.platform==='whatsapp'&&m.direction==='outgoing');
    if(exact.length===1&&['sent','delivered','read','failed'].includes(exact[0]!.deliveryStatus??''))return {messageId:input.messageId,status:exact[0]!.deliveryStatus as 'sent'|'delivered'|'read'|'failed'};

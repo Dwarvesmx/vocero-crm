@@ -302,8 +302,18 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       const [revokedResult]=await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${revokedConsent.id}`;
       expect(revokedResult!.result).toBe("consent_unverified");
       await sql`update demo_authorization set state='active' where id=${authorized!.id}`;
+      const providerMessageId = "wamid-commercial-offer-synthetic";
+      await sql`update message set status='sent',wa_message_id=${providerMessageId} where id=${outbound}`;
+      const blockedConsent = evento("ACEPTO DEMO");
+      await enviar(blockedConsent);
+      const [blockedResult] = await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${blockedConsent.id}`;
+      expect(blockedResult?.result).toBe("thread_busy");
+      efectos.receipt = { messageId: providerMessageId, status: "delivered" };
       const consent = evento("ACEPTO DEMO");
-      expect((await enviar(consent)).status).toBe(200);
+      try { expect((await enviar(consent)).status).toBe(200); }
+      finally { efectos.receipt = null; }
+      const [reconciliado] = await sql`select status from message where id=${outbound}`;
+      expect(reconciliado?.status).toBe("delivered");
       expect((await enviar({ ...consent, id: randomUUID() })).status).toBe(200);
       const [verdict] = await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${consent.id}`;
       expect(verdict?.result).toBe("linked");

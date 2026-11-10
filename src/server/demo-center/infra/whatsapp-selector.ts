@@ -5,6 +5,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
 import { huellaDe } from "@/server/webhooks/eventos";
 import { permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
+import { consultarConfirmacionDemoZernio } from "@/server/zernio/whatsapp-envio";
 import { codigoDemoWhatsApp, posteriorAlCorte, telefonoWhatsApp } from "../domain/whatsapp";
 import { externalIdentityLookup, iniciarSesionWhatsApp } from "./external-session";
 import { bloquearRutaWhatsApp, canalDemoWhatsApp, hashCodigo, invalidarPendientesWhatsApp } from "./whatsapp-link";
@@ -266,8 +267,27 @@ export async function resolverIngresoComercialWhatsApp(org: string, cuenta: stri
   return { blocked: false, phone: String(r.wa_identity) };
 }
 
+async function conciliarSalidasComerciales(org: string, cuenta: string, hilo: string) {
+  const sql = getSql();
+  const salidas = await sql`select m.id,m.wa_message_id,j.request_key from zernio_whatsapp_outbox j
+    join message m on (m.organization_id,m.id,m.conversation_id)=(j.organization_id,j.message_id,j.conversation_id)
+    where j.organization_id=${org} and j.account_ref=${cuenta} and j.thread_ref=${hilo} and j.status='completado'
+    and m.scope_kind='commercial' and m.direction='out' and m.status='sent' and m.wa_message_id is not null
+    order by j.updated_at desc limit 6`;
+  await Promise.allSettled(salidas.map(async salida => {
+    const confirmacion = await consultarConfirmacionDemoZernio({ organizationId: org, accountRef: cuenta, threadRef: hilo,
+      requestKey: salida.request_key, messageId: salida.wa_message_id }, true);
+    if (!confirmacion || confirmacion.messageId !== salida.wa_message_id || confirmacion.status === 'sent') return;
+    await sql`update message set status=${confirmacion.status}
+      where organization_id=${org} and id=${salida.id} and wa_message_id=${confirmacion.messageId}
+      and scope_kind='commercial' and direction='out' and status='sent'`;
+  }));
+}
+
+const conciliarAntesDeConsentir = Symbol("conciliarAntesDeConsentir");
+
 /** El mismo commit fija ámbito, persiste el ingreso y, en demo, encola el turno. */
-export async function recibirWhatsAppConSelector(org: string, cuenta: string, evento: EventoWhatsAppZernio) {
+async function seleccionarYPersistir(org: string, cuenta: string, evento: EventoWhatsAppZernio, intentarConciliacion: boolean) {
   return getSql().begin(async sql => {
     await sql`select id from organization where id=${org} for update`;
     const [cuentaVigente] = await sql`select 1 from zernio_whatsapp_credentials where organization_id=${org} and account_ref=${cuenta} and enabled for share`;
@@ -278,6 +298,7 @@ export async function recibirWhatsAppConSelector(org: string, cuenta: string, ev
     if (previo) return null;
     const [clock] = await sql`select clock_timestamp() as now`;
     const ambito = await seleccionar(sql, org, cuenta, evento, new Date(clock!.now));
+    if (ambito === "thread_busy" && intentarConciliacion && consentimientoDemo(evento.message.text)) return conciliarAntesDeConsentir;
     const id = randomUUID();
     const payload = ambito === "commercial" ? evento : { account: { accountId: cuenta }, event: evento.event,
       conversation: { id: evento.conversation.id }, id: evento.id, result: ambito };
@@ -286,4 +307,13 @@ export async function recibirWhatsAppConSelector(org: string, cuenta: string, ev
       case when ${ambito === "commercial"} then null else clock_timestamp() end)`;
     return ambito === "commercial" ? id : null;
   });
+}
+
+export async function recibirWhatsAppConSelector(org: string, cuenta: string, evento: EventoWhatsAppZernio) {
+  const resultado = await seleccionarYPersistir(org, cuenta, evento, true);
+  if (typeof resultado !== "symbol") return resultado;
+  // Consultar al proveedor fuera de la transacción. El selector vuelve a validar el mismo evento.
+  await conciliarSalidasComerciales(org, cuenta, evento.conversation.id);
+  const revalidado = await seleccionarYPersistir(org, cuenta, evento, false);
+  return typeof revalidado === "symbol" ? null : revalidado;
 }

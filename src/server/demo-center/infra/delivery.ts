@@ -26,6 +26,11 @@ async function resolve(sql:ReturnType<typeof getSql>,org:string,session:string,o
   join demo_usage_operation o on o.organization_id=s.organization_id and o.session_id=s.id and o.operation_key=${operation}
   where s.organization_id=${org} and s.id=${session} and s.kind='external' and c.channel='whatsapp' and not c.is_test
   and (${canalDemoWhatsApp()} or not exists(select 1 from demo_whatsapp_link l where l.organization_id=s.organization_id and l.external_session_id=s.id))
+  and not t.ai_paused
+  and not (coalesce(p.visual_identity->>'demoPolicy','supervised')='disabled' and exists(
+    select 1 from demo_whatsapp_link l join demo_session_event e
+      on (e.organization_id,e.space_id,e.session_id)=(l.organization_id,l.space_id,l.web_session_id)
+    where l.organization_id=s.organization_id and l.external_session_id=s.id and e.type='whatsapp_demo_offered'))
   and b.state='verified' for update of s,a,p,r,b,c,t,o`;
  if(!row)throw new SimulatorError('not_found',404);
  const [clock]=await sql`select clock_timestamp() as now`;

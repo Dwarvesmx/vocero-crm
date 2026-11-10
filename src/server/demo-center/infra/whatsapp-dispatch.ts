@@ -24,7 +24,7 @@ export async function construirDespachoWhatsAppDemo(fila: FilaDespacho) {
     and a.state='active' and b.state='verified' and b.account_ref=l.account_ref
     and m.id=${fila.messageIds[0]!} and m.scope_kind='demo' and m.route_generation=s.route_generation and m.direction='in'
     and m.type='text' and m.wa_timestamp>clock_timestamp()-interval '24 hours'
-    and c.channel_thread_ref=l.thread_ref and c.ai_enabled and not c.is_test and c.handoff_at is null and c.handoff_pending_message_id is null`;
+    and not t.ai_paused and c.channel_thread_ref=l.thread_ref and c.ai_enabled and not c.is_test and c.handoff_at is null and c.handoff_pending_message_id is null`;
   if (!r || !r.text || externalIdentityLookup(fila.organizationId,r.account_ref,"phone",r.wa_identity) !== r.phone_lookup) return null;
   const expiracion = new Date(r.expires_at).toISOString();
   const envio = new Date(r.wa_timestamp);

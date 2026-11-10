@@ -258,7 +258,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       }));
       expect((await offer("NOVA", "invalid")).status).toBe(401);
       expect((await offer("NOVA", process.env.BOT_API_KEY, "otra-conversacion")).status).toBe(403);
-      expect(await (await offer("sector desconocido")).json()).toMatchObject({ status: "choose", options: [{ demo: "Casa Horizonte" }, { demo: "NOVA" }] });
+      expect(await (await offer("sector desconocido")).json()).toMatchObject({ status: "choose", options: [{ id: "pizza", demo: "NOVA" }] });
       const [authorized] = await sql`select id from demo_authorization where organization_id=${org} and space_id='pizza' and state='active'`;
       expect(authorized).toBeTruthy();
       await sql`update demo_authorization set state='revoked' where id=${authorized!.id}`;
@@ -458,18 +458,13 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       const [audits] = await sql`select count(*)::int as n from demo_admin_audit where organization_id=${org}
         and action='whatsapp_revoked' and target_id=${linked!.id}`;
       expect(audits!.n).toBe(1);
-      // Una autorización temporal revocada no invalida el permiso piloto persistente.
+      // El modo comercial crea otra autorización temporal sin registro de piloto.
       await sql`update zernio_whatsapp_outbox set status='completado' where id=${end!.id}`;
       const [adminRoute]=await sql`select generation from demo_identity_route where organization_id=${org}`;
       await restituirWhatsApp(actor,"pizza",linked!.web_session_id,adminRoute!.generation);
       await new Promise(resolve => setTimeout(resolve, 1100));
-      await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"automatic"'::jsonb) where id='pizza'`;
-      const [revision]=await sql`select generation from demo_space where organization_id=${org} and id='pizza'`;
-      const pilotResponse=await ADMIN_SPACE(new Request("http://127.0.0.1/api/demo-center",{method:"POST",
-        headers:{"content-type":"application/json"},body:JSON.stringify({action:"pilotAllow",id:"pizza",
-          expectedGeneration:revision!.generation,phone:"+"+phone})}));
-      expect(pilotResponse.status).toBe(200);
-      vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT","true");
+      await sql`update demo_space set visual_identity=jsonb_set(visual_identity,'{demoPolicy}','"automatic_commercial"'::jsonb) where id='pizza'`;
+      vi.stubEnv("DEMO_CONVERSATIONAL_SINGLE_PARTICIPANT","false");
       const again=evento("Quiero otra demostración");
       await enviar(again);
       await sql`update webhook_event set status='procesado' where payload->>'id'=${again.id}`;
@@ -485,7 +480,7 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       await sql`update zernio_whatsapp_outbox set status='cancelado' where message_id=${againCommercial}`;
       const againResponse=await OFRECER(new Request("http://127.0.0.1:55535/api/bot/demo/offer",{method:"POST",
         headers:{"content-type":"application/json","x-api-key":process.env.BOT_API_KEY!},
-        body:JSON.stringify({contractVersion:1,conversationId:conv!.id,dispatchId:againDispatch,sector:"NOVA"})}));
+        body:JSON.stringify({contractVersion:1,conversationId:conv!.id,dispatchId:againDispatch,sector:"pizza"})}));
       if (againResponse.status !== 200) throw Error(JSON.stringify(await againResponse.json()));
       const againOffer=await againResponse.json();
       const againOut=randomUUID();

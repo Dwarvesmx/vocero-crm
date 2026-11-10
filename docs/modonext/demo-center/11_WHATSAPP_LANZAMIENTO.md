@@ -95,3 +95,9 @@ PROBADO con PostgreSQL descartable, eventos firmados y transporte controlado: of
 Ampliación probada: tras esa segunda sesión, su cierre, confirmaciones sintéticas de entrega y restitución automática, el mismo participante recibió otra oferta y activó una nueva sesión del mismo perfil sin otra autorización administrativa. La cuarentena se mantiene si existe una salida aceptada sin confirmación, una operación incierta o un despacho heredado reciente. Las comprobaciones usaron PostgreSQL descartable, webhook firmado y transporte controlado (3/3); no acreditan WhatsApp ni confirmaciones reales de Zernio.
 
 Pendiente antes de activación: acreditar la reversión con el esquema real y realizar la aceptación supervisada. Las salidas comerciales heredadas sin `dispatchId` se rechazan para conversaciones que ya pasaron por una demo; los seguimientos que carezcan de origen trazable también quedan sujetos a esa restricción.
+
+## Política comercial de demos WhatsApp
+
+En General, «Automático para prospectos elegibles» usa los controles de IA del contacto y la conversación. «Piloto restringido» conserva el alcance del valor automático histórico. El catálogo se obtiene desde el despacho comercial firmado. El CRM vuelve a comprobar identidad, política y consentimiento antes de cambiar de ruta. El presupuesto y las cuotas conservan los controles existentes.
+
+Comprobado con TypeScript y la integración existente de PostgreSQL descartable y WhatsApp controlado (3/3). La aceptación real se realiza después de autorizar y desplegar las imágenes verificadas.

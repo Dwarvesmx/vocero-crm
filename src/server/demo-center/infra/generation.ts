@@ -15,6 +15,14 @@ export async function generateExternal(org:string,space:string,session:string,ke
     join demo_identity_route r on r.organization_id=s.organization_id and r.session_id=s.id and r.mode='demo' and r.generation=s.route_generation
     where s.organization_id=${org} and s.space_id=${space} and s.id=${session} and s.kind='external' and s.state='active'
     and (${canalDemoWhatsApp()} or not exists(select 1 from demo_whatsapp_link l where l.organization_id=s.organization_id and l.external_session_id=s.id))
+    and not exists(select 1 from demo_whatsapp_link l
+      join conversation c on (c.organization_id,c.id)=(s.organization_id,s.conversation_id)
+      join contact t on (t.organization_id,t.id)=(c.organization_id,c.contact_id)
+      where l.organization_id=s.organization_id and l.external_session_id=s.id
+      and (t.ai_paused or not c.ai_enabled or c.handoff_at is not null or c.handoff_pending_message_id is not null
+        or (p.visual_identity->>'demoPolicy'='disabled' and exists(
+          select 1 from demo_session_event e where (e.organization_id,e.space_id,e.session_id)=(l.organization_id,l.space_id,l.web_session_id)
+          and e.type='whatsapp_demo_offered'))))
     and s.expires_at>clock_timestamp() and s.idle_deadline>clock_timestamp() and a.state='active' and p.status='active' and (a.expires_at is null or a.expires_at>clock_timestamp())
     and exists(select 1 from demo_identity_binding b where b.organization_id=s.organization_id and b.authorization_id=a.id and b.identity_lookup=r.identity_lookup and b.state='verified' and (b.expires_at is null or b.expires_at>clock_timestamp())) for update of s,a,p,r`;
   if(!s)throw new SimulatorError('authorization_unavailable',403);

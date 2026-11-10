@@ -167,7 +167,8 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
               <select name="demoPolicy" className={inputStyle} defaultValue={(space?.visualIdentity as {demoPolicy?:string} | undefined)?.demoPolicy ?? "supervised"}>
                 <option value="disabled">Deshabilitado</option>
                 <option value="supervised">Supervisado: autorización administrativa previa</option>
-                <option value="automatic">Automático: piloto autorizado, identidad verificada y consentimiento</option>
+                <option value="automatic">Piloto restringido</option>
+                <option value="automatic_commercial">Automático para prospectos elegibles</option>
               </select>
               <span className="block text-sm text-muted-foreground">Los límites, presupuestos, revocaciones y cuarentenas siguen vigentes.</span>
             </label>
@@ -176,6 +177,13 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
         </form>}
         {space && <section className="mt-4 space-y-2 rounded-lg border p-4">
             <h2 className="font-semibold">Estado · {statusLabel[space.status]}</h2>
+            <p className="text-sm text-muted-foreground">
+              WhatsApp {detail.operational.whatsapp ? "conectado y habilitado" : "no disponible"} ·
+              Conversación {detail.operational.conversation ? "habilitada" : "deshabilitada"} ·
+              Generación {detail.operational.generation ? "configurada" : "no disponible"} ·
+              Entrega {detail.operational.delivery ? "habilitada en CRM" : "deshabilitada"} ·
+              Perfil {detail.operational.published ? "publicado" : "pendiente"}
+            </p>
             <button type="button" className={buttonStyle} disabled={busy || (!profile && space.status !== "active")} onClick={() => {
               const status = space.status === "active" ? "disabled" : "active";
               if (window.confirm(status === "active" ? "¿Activar la configuración del espacio?" : "¿Desactivar el espacio?")) void send({ action: "status", id: space.id, expectedGeneration: space.generation, status });

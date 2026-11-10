@@ -4,7 +4,7 @@ const name = z.string().trim().min(1).max(120);
 export const spaceInput = z.object({
   name, commercialName: name, sector: name,
   description: z.string().trim().max(2000),
-  visualIdentity: z.object({ color: z.string().regex(/^#[a-f0-9]{6}$/i), demoPolicy: z.enum(["disabled","automatic","supervised"]).optional() }).strict(),
+  visualIdentity: z.object({ color: z.string().regex(/^#[a-f0-9]{6}$/i), demoPolicy: z.enum(["disabled","automatic","automatic_commercial","supervised"]).optional() }).strict(),
 }).strict();
 
 const profileInput = z.object({

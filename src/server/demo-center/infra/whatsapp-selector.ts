@@ -55,7 +55,7 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
     values(${idContacto},${org},${persona.phone},${persona.phone},'Visitante demo')
     on conflict(organization_id,channel,wa_identity) do nothing`;
   const [contacto] = await sql`select id,ai_paused from contact where organization_id=${org} and channel='whatsapp' and wa_identity=${persona.phone}`;
-  if (!contacto) throw new SimulatorError("contact_unavailable");
+  if (!contacto || contacto.ai_paused) throw new SimulatorError("contact_unavailable");
   await sql`insert into conversation(id,organization_id,contact_id,channel_thread_ref,ai_enabled)
     values(${randomUUID()},${org},${contacto.id},${hilo},${!contacto.ai_paused}) on conflict do nothing`;
   const [conv] = await sql`select * from conversation where organization_id=${org} and contact_id=${contacto.id} and not is_test for update`;
@@ -184,15 +184,22 @@ async function seleccionar(sql: TransactionSql, org: string, cuenta: string, eve
     return "blocked";
   }
   const [s] = await sql`select s.*,l.linked_at,b.expires_at as binding_expiry,a.expires_at as auth_expiry,
-    a.state as auth_state,p.status as space_state
+    a.state as auth_state,p.status as space_state,
+    c.ai_enabled and not t.ai_paused and c.handoff_at is null and c.handoff_pending_message_id is null as ai_available,
+    not (coalesce(p.visual_identity->>'demoPolicy','supervised')='disabled' and exists(
+      select 1 from demo_session_event e where e.organization_id=s.organization_id
+        and e.space_id=s.space_id and e.session_id=l.web_session_id and e.type='whatsapp_demo_offered'
+    )) as policy_available
     from demo_session s join demo_whatsapp_link l on (l.organization_id,l.external_session_id)=(s.organization_id,s.id)
     join demo_authorization a on (a.organization_id,a.space_id,a.id)=(s.organization_id,s.space_id,s.authorization_id)
     join demo_identity_binding b on (b.organization_id,b.space_id,b.authorization_id)=(s.organization_id,s.space_id,a.id)
     join demo_space p on (p.organization_id,p.id)=(s.organization_id,s.space_id)
+    join conversation c on (c.organization_id,c.id)=(s.organization_id,s.conversation_id)
+    join contact t on (t.organization_id,t.id)=(c.organization_id,c.contact_id)
     where s.organization_id=${org} and s.id=${r.session_id} and s.conversation_id=${link.conversation_id}
     and s.route_generation=${r.generation} and l.thread_ref=${hilo} and b.state='verified' and b.account_ref=${cuenta}
     and b.identity_lookup=${link.phone_lookup} for update of s,a,p,b`;
-  const vigente = s && s.state === "active" && s.auth_state === "active" && s.space_state === "active" &&
+  const vigente = s && s.state === "active" && s.auth_state === "active" && s.space_state === "active" && s.ai_available && s.policy_available &&
     [s.expires_at,s.idle_deadline,s.binding_expiry,s.auth_expiry].every(d => !d || +new Date(d) > +ahora);
   if (!vigente || !canalDemoWhatsApp()) {
     const expired = s?.state === "active" && [s.expires_at, s.idle_deadline].some(d => +new Date(d) <= +ahora);

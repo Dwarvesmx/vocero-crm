@@ -6,7 +6,7 @@ import { SimulatorError } from "@/server/demo-center/infra/simulator";
 
 const request = z.object({
   contractVersion: z.literal(1), conversationId: z.string().min(1).max(128),
-  dispatchId: z.string().min(1).max(128), sector: z.string().trim().min(1).max(128),
+  dispatchId: z.string().min(1).max(128), sector: z.string().trim().min(1).max(128).optional(),
 }).strict();
 
 export async function POST(req: Request) {

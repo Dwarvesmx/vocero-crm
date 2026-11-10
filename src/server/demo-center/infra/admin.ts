@@ -6,6 +6,9 @@ import type { AdminActor, AdminCommand, GlobalCommand } from "../domain/contract
 
 import { encryptSecret } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
+import { canalDemoWhatsApp } from "./whatsapp-link";
+import { configuredDemoProvider } from "./finance";
+import { SimulatorError } from "./simulator";
 import { telefonoWhatsApp } from "../domain/whatsapp";
 
 const { demoSpace, demoProfileVersion, demoAdminAudit, demoAuthorization, demoLimits, demoPilotParticipant } = schema;
@@ -39,7 +42,24 @@ export async function consultarEspacio(actor: AdminActor, id: string) {
       .from(demoPilotParticipant).where(scoped(demoPilotParticipant.organizationId, actor.organizationId, eq(demoPilotParticipant.spaceId, id))),
   ]);
   const policy = limits[0];
-  return { space, profiles, audit, authorizations, pilots, limits: policy ? {
+  const [connection] = await db.select({ enabled: schema.zernioWhatsappCredentials.enabled })
+    .from(schema.zernioWhatsappCredentials)
+    .where(scoped(schema.zernioWhatsappCredentials.organizationId, actor.organizationId));
+  let providerReady = false;
+  try {
+    await configuredDemoProvider(actor.organizationId);
+    providerReady = true;
+  } catch (error) {
+    if (!(error instanceof SimulatorError)) throw error;
+  }
+  const operational = {
+    whatsapp: canalDemoWhatsApp() && connection?.enabled === true,
+    generation: providerReady && process.env.DEMO_EXTERNAL_GENERATION_ENABLED === "true",
+    delivery: process.env.DEMO_EXTERNAL_DELIVERY_ENABLED === "true",
+    conversation: process.env.DEMO_CONVERSATIONAL_ENABLED === "true" && process.env.DEMO_EXTERNAL_SESSIONS_ENABLED === "true",
+    published: profiles.some(profile => profile.id === space.currentProfileVersionId),
+  };
+  return { space, profiles, audit, authorizations, pilots, operational, limits: policy ? {
     ...policy, budgetMicroUsd: String(policy.budgetMicroUsd),
     sessionBudgetMicroUsd: policy.sessionBudgetMicroUsd?.toString() ?? null,
   } : null };

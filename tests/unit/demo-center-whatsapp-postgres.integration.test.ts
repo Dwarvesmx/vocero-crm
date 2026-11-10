@@ -427,9 +427,10 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       await caducarDemosConversacionales();
       const [stillBlocked]=await sql`select mode from demo_identity_route where organization_id=${org}`;
       expect(stillBlocked!.mode).toBe("blocked");
-      await sql`update message set status='delivered' where organization_id=${org} and demo_session_id=${linked!.id}
-        and direction='out' and scope_kind='demo' and status='sent'`;
-      await caducarDemosConversacionales();
+      await sql`update message set wa_message_id='notice-start-synthetic' where id=(select message_id from zernio_whatsapp_outbox where id=${start!.id})`;
+      confirmacionesComerciales.enabled = true;
+      try { await caducarDemosConversacionales(); }
+      finally { confirmacionesComerciales.enabled = false; }
       const [autoRestored]=await sql`select mode from demo_identity_route where organization_id=${org}`;
       expect(autoRestored!.mode).toBe("commercial");
       await sql`update demo_session set state='active',ended_at=null,expires_at=clock_timestamp()+interval '5 minutes' where id=${linked!.id}`;

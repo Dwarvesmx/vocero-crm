@@ -3,6 +3,7 @@ import { getSql } from "@/lib/db";
 import { canalConversacional } from "./whatsapp-offer";
 import { bloquearRutaWhatsApp, restituirWhatsApp } from "./whatsapp-link";
 import { encolarAvisoDemo } from "./whatsapp-notice";
+import { conciliarSalidasWhatsApp } from "./whatsapp-reconcile";
 
 /** Cierra sin esperar otro mensaje. El aviso requiere una ventana de 24 horas acreditada. */
 export async function caducarDemosConversacionales() {
@@ -29,6 +30,21 @@ export async function caducarDemosConversacionales() {
     await bloquearRutaWhatsApp(sql, org, s.phone_lookup, s.id, "expired", "session_deadline");
     if (s.last_inbound) await encolarAvisoDemo(sql, org, s.id, s.account_ref, s.thread_ref, "ended", new Date(s.last_inbound).toISOString());
   });
+  // Reconciliar salidas aceptadas sin recibo antes de evaluar el retorno comercial.
+  const blocked = await db`select distinct l.organization_id,l.account_ref,l.thread_ref
+    from demo_whatsapp_link l join demo_session s on (s.organization_id,s.id)=(l.organization_id,l.external_session_id)
+    join demo_identity_route r on r.organization_id=l.organization_id and r.channel='whatsapp' and r.identity_lookup=l.phone_lookup
+    where r.mode='blocked' and r.generation=s.route_generation+1
+      and r.blocked_reason in ('prospect_finished','session_deadline','inbound_quota','generation_quota')
+      and s.state in ('closed','expired') and l.thread_ref is not null
+      and exists(select 1 from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
+        where j.organization_id=l.organization_id and j.account_ref=l.account_ref and j.thread_ref=l.thread_ref
+          and j.status='completado' and m.direction='out' and m.status='sent' and m.wa_message_id is not null)
+    limit 3`;
+  for (const row of blocked) {
+    try { await conciliarSalidasWhatsApp(String(row.organization_id), String(row.account_ref), String(row.thread_ref), false); }
+    catch { console.warn("No se pudo conciliar el retorno comercial"); }
+  }
   // Solo cierres conversacionales y únicamente después del aviso final confirmado.
   // La restitución reutiliza la comprobación transaccional de pendientes y el corte temporal.
   const ready = await db`select l.organization_id,l.space_id,l.web_session_id,r.generation,a.created_by

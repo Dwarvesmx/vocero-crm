@@ -5,7 +5,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
 import { huellaDe } from "@/server/webhooks/eventos";
 import { permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
-import { consultarConfirmacionesZernio } from "@/server/zernio/whatsapp-envio";
+import { conciliarSalidasWhatsApp } from "./whatsapp-reconcile";
 import { codigoDemoWhatsApp, posteriorAlCorte, telefonoWhatsApp } from "../domain/whatsapp";
 import { externalIdentityLookup, iniciarSesionWhatsApp } from "./external-session";
 import { bloquearRutaWhatsApp, canalDemoWhatsApp, hashCodigo, invalidarPendientesWhatsApp } from "./whatsapp-link";
@@ -267,28 +267,6 @@ export async function resolverIngresoComercialWhatsApp(org: string, cuenta: stri
   return { blocked: false, phone: String(r.wa_identity) };
 }
 
-async function conciliarSalidasComerciales(org: string, cuenta: string, hilo: string) {
-  const sql = getSql();
-  const salidas = await sql<{ id: string; wa_message_id: string }[]>`select m.id,m.wa_message_id from zernio_whatsapp_outbox j
-    join message m on (m.organization_id,m.id,m.conversation_id)=(j.organization_id,j.message_id,j.conversation_id)
-    where j.organization_id=${org} and j.account_ref=${cuenta} and j.thread_ref=${hilo} and j.status='completado'
-    and m.scope_kind='commercial' and m.direction='out' and m.status='sent' and m.wa_message_id is not null
-    order by j.updated_at desc limit 30`;
-  const confirmaciones = await consultarConfirmacionesZernio({ organizationId: org, accountRef: cuenta, threadRef: hilo },
-    salidas.map(salida => salida.wa_message_id));
-  const definitivas = [...confirmaciones.values()].filter(estado => estado !== "sent").length;
-  if (salidas.length > definitivas) {
-    console.warn("Conciliación comercial de Zernio incompleta", { consultadas: salidas.length, definitivas });
-  }
-  await Promise.all(salidas.map(async salida => {
-    const estado = confirmaciones.get(salida.wa_message_id);
-    if (!estado || estado === "sent") return;
-    await sql`update message set status=${estado}
-      where organization_id=${org} and id=${salida.id} and wa_message_id=${salida.wa_message_id}
-      and scope_kind='commercial' and direction='out' and status='sent'`;
-  }));
-}
-
 const conciliarAntesDeConsentir = Symbol("conciliarAntesDeConsentir");
 
 /** El mismo commit fija ámbito, persiste el ingreso y, en demo, encola el turno. */
@@ -318,7 +296,7 @@ export async function recibirWhatsAppConSelector(org: string, cuenta: string, ev
   const resultado = await seleccionarYPersistir(org, cuenta, evento, true);
   if (typeof resultado !== "symbol") return resultado;
   // Consultar al proveedor fuera de la transacción. El selector vuelve a validar el mismo evento.
-  await conciliarSalidasComerciales(org, cuenta, evento.conversation.id);
+  await conciliarSalidasWhatsApp(org, cuenta, evento.conversation.id, true);
   const revalidado = await seleccionarYPersistir(org, cuenta, evento, false);
   return typeof revalidado === "symbol" ? null : revalidado;
 }

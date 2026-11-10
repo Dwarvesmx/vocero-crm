@@ -232,7 +232,7 @@ async function procesar(fila: FilaDespacho): Promise<void> {
    * turno sobre nada —Nea lo rechaza con 422—, y un 4xx no se reintenta: la
    * conversación acabaría con un humano por un fallo que no existió.
    */
-  if (evento.messages.length === 0) {
+  if (evento.messages.length === 0 && evento.type !== "commercial.resume") {
     await descartarDespacho(fila, "sin mensajes por despachar");
     return;
   }

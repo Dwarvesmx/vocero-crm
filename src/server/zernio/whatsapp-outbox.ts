@@ -7,6 +7,7 @@ import { publish } from "@/server/events/bus";
 import { obtenerZernioWhatsAppPorOrg } from "@/server/zernio/whatsapp-credenciales";
 import { enviarTextoWhatsAppZernio } from "@/server/zernio/whatsapp-envio";
 import { liberarSalidaZernio, recuperarSalidasInciertasZernio } from "./whatsapp-autorizacion";
+import { esReanudacionComercial } from "@/server/brains/commercial-resume";
 
 const RESERVA_MS = 120_000;
 const MAX_INTENTOS = 6;
@@ -67,10 +68,19 @@ export async function encolarEnvioWhatsAppZernio(input: {
     if (input.aiGenerated && route && !input.sourceDispatchId) throw new StaleCommercialDispatchError("Falta el despacho de origen");
     let traceGeneration: number | null = null;
     if (input.aiGenerated && input.sourceDispatchId) {
+      const reanudacion = esReanudacionComercial(input.sourceDispatchId);
       const source = await tx.execute(sql`select d.id,d.commercial_trace_generation from dispatch d
         where d.organization_id=${input.organizationId} and d.conversation_id=${input.conversationId}
           and d.id=${input.sourceDispatchId} and d.scope_kind='commercial' and d.status in ('en_vuelo','entregado')
-          and (${route?.blocked_since ?? null}::timestamptz is null or d.first_message_at > ${route?.blocked_since ?? null}::timestamptz)
+          and (${route?.blocked_since ?? null}::timestamptz is null or d.first_message_at > (${route?.blocked_since ?? null}::timestamptz at time zone 'UTC'))
+          and (not ${reanudacion} or (
+            d.commercial_resume_envelope is not null and d.commercial_trace_generation=${route?.generation ?? null}
+            and exists(select 1 from agent_profile p where p.organization_id=d.organization_id and p.enabled)
+            and exists(select 1 from contact t where t.organization_id=d.organization_id and t.id=${conv.contactId} and not t.ai_paused)
+            and not exists(select 1 from message m where m.organization_id=d.organization_id and m.conversation_id=d.conversation_id
+              and m.scope_kind='commercial' and m.created_at >= (${route?.blocked_since ?? null}::timestamptz at time zone 'UTC')
+              and (m.direction='out' or (m.direction='in' and jsonb_array_length(d.commercial_resume_envelope->'messages')=0)))
+          ))
         for update`);
       if (!source.length) throw new StaleCommercialDispatchError("Despacho de origen no válido o anterior al corte");
       traceGeneration = route ? Number(route.generation) : 0;

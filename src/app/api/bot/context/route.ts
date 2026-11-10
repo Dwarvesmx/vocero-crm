@@ -9,6 +9,7 @@ import { windowMsFor } from "@/server/channels/capabilities";
 import { citasParaContexto } from "@/server/agenda/context";
 import { anuncioDelContacto } from "@/server/attribution/store";
 import { siguientesDelLead } from "@/server/bot/stage";
+import { contextoDeReanudacion } from "@/server/brains/commercial-resume";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,10 @@ export async function GET(req: Request) {
 
   if (!contact || !conversation) {
     return apiError(404, "not_found", "Conversación no encontrada");
+  }
+  const resumeDispatch = url.searchParams.get("resumeDispatch");
+  if (resumeDispatch && !await contextoDeReanudacion(organizationId, conversation.id, resumeDispatch)) {
+    return apiError(404, "resume_unavailable", "Reanudación obsoleta o no autorizada");
   }
 
   const [leadRows, booking, anuncio] = await Promise.all([

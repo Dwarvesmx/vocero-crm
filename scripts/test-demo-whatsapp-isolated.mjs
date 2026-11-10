@@ -39,7 +39,7 @@ try {
     await migrate(drizzle(client), { migrationsFolder: resolve("drizzle") });
   } finally { await client.end(); }
   ejecutar(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run",
-    "tests/unit/demo-center-whatsapp-postgres.integration.test.ts"], { ...env, DATABASE_URL: dsn,
+    "tests/unit/demo-center-whatsapp-postgres.integration.test.ts", ...process.argv.slice(2)], { ...env, DATABASE_URL: dsn,
     APP_BASE_URL: "http://127.0.0.1:55534", BETTER_AUTH_SECRET: "synthetic-wa-only-secret",
     ENCRYPTION_KEY: Buffer.alloc(32).toString("base64"), META_WEBHOOK_VERIFY_TOKEN: "synthetic-wa",
     DEMO_WA_TEST: "1", DEMO_WHATSAPP_ENABLED: "true", DEMO_WHATSAPP_NUMBER: "525500000099", ZERNIO_WHATSAPP_ENABLED: "true",

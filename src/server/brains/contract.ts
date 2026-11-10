@@ -53,6 +53,8 @@ export type UbicacionDelEvento = {
 };
 
 export type EventoDespacho = {
+  type?: "commercial.resume";
+  resume?: { sessionId: string; generation: number; assistant: string };
   dispatchId: string;
   organization: { id: string; slug: string | null };
   conversation: {

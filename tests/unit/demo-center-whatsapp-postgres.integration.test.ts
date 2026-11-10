@@ -30,6 +30,9 @@ import { POST as GENERAR } from "@/app/api/bot/demo/generate/route";
 import { POST as ENTREGA } from "@/app/api/bot/demo/delivery/route";
 import { procesarEvento } from "@/server/webhooks/worker";
 import { huellaDe } from "@/server/webhooks/eventos";
+import { construirEvento } from "@/server/brains/deliver";
+import { contextoDeReanudacion } from "@/server/brains/commercial-resume";
+import { bloquearRutaWhatsApp } from "@/server/demo-center/infra/whatsapp-link";
 
 const adminAuth = vi.hoisted(() => ({ role: "owner" }));
 vi.mock("@/lib/auth/session", () => ({
@@ -64,7 +67,7 @@ vi.mock("@/server/zernio/whatsapp-envio", () => ({
   enviarTextoWhatsAppZernio: async ({ cuentaAutorizada, conversationId, texto }: Record<string, string>) => {
     expect(cuentaAutorizada).toBe("wa-account");
     expect(conversationId).toBe("wa-thread");
-    if (texto?.startsWith("Empezó la demo") || texto?.startsWith("La demostración terminó")) { efectos.avisos++; return "notice-" + randomUUID(); }
+    if (texto?.startsWith("Empezó la demo") || texto?.startsWith("¡Listo! 🎉 Gracias por probar")) { efectos.avisos++; return "notice-" + randomUUID(); }
     expect(texto).toBe("Respuesta controlada de NOVA");
     efectos.salidas++;
     return efectos.salidas === 1 ? "wamid-out-demo-synthetic" : "wamid-out-" + randomUUID();
@@ -155,6 +158,71 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
     expect(code).toMatch(/^MODONEXT-DEMO [\w-]{32}$/);
     return { web: String(web.id), code };
   }
+
+  it.each([true, false])("reanudación comercial durable con mensajes de transición: %s", async conMensajes => {
+    vi.stubEnv("ZERNIO_NEA_DISPATCH_ENABLED", "true");
+    const programar = vi.spyOn(await import("@/server/dispatch/worker"), "programarTanda").mockImplementation(() => {});
+    try {
+      const number = conMensajes ? "525500001001" : "525500001002";
+      const thread = `resume-thread-${number}`;
+      const web = await simulatorCommand(actor, { action: "start", spaceId: "pizza", requestKey: randomUUID() }, { tokenHash: randomUUID() });
+      const link = await prepararVinculoWhatsApp({ id: web.id, organization_id: org }, number);
+      const eventoDelHilo = (texto: string, sentAt?: string) => {
+        const event = evento(texto, { phone: number, bsuid: null, sentAt });
+        event.conversation.id = thread;
+        event.message.conversationId = thread;
+        return event;
+      };
+      await enviar(eventoDelHilo(new URL(link.url).searchParams.get("text")!));
+      const [sesion] = await sql`select s.id,s.conversation_id,l.phone_lookup from demo_session s
+        join demo_whatsapp_link l on l.external_session_id=s.id where l.web_session_id=${web.id}`;
+      await sql`insert into agent_profile(id,organization_id,enabled) values('resume-profile',${org},true) on conflict do nothing`;
+      await sql`update conversation set last_inbound_at=clock_timestamp() where id=${sesion!.conversation_id}`;
+      await sql.begin(tx => bloquearRutaWhatsApp(tx, org, sesion!.phone_lookup, sesion!.id, "closed", "prospect_finished"));
+      const [ruta] = await sql`update demo_identity_route set blocked_since=clock_timestamp()-interval '10 seconds'
+        where organization_id=${org} and identity_lookup=${sesion!.phone_lookup} returning generation`;
+      const texts = conMensajes ? ["¿Qué cuesta el servicio?", "Quiero contratar"] : [];
+      for (const [i, text] of texts.entries()) {
+        const event = eventoDelHilo(text, new Date(Date.now() - 4000 + i * 1000).toISOString());
+        await enviar(event);
+        await enviar(event);
+      }
+      const restore = () => restituirWhatsApp(actor, "pizza", String(web.id), Number(ruta!.generation));
+      const result = await Promise.allSettled([restore(), restore()]);
+      expect(result.filter(item => item.status === "fulfilled"), result.map(item => item.status === "rejected" ? String(item.reason) : "ok").join(" / ")).toHaveLength(1);
+      const dispatchId = `resume:${sesion!.id}`;
+      await sql`update dispatch set status='en_vuelo' where id=${dispatchId}`;
+      const [fila] = await getDb().select().from(schema.dispatch).where(eq(schema.dispatch.id, dispatchId));
+      expect(fila?.messageIds).toHaveLength(texts.length);
+      expect(await contextoDeReanudacion(org, sesion!.conversation_id, dispatchId)).not.toBeNull();
+      const payload = await construirEvento(fila!);
+      expect(payload?.type).toBe("commercial.resume");
+      expect(payload?.messages.map(m => m.text)).toEqual(texts);
+      expect(await construirEvento(fila!)).toEqual(payload);
+      const salida = {
+        organizationId: org, conversationId: sesion!.conversation_id, accountRef: cuenta,
+        threadRef: thread, requestKey: randomUUID(), sourceDispatchId: dispatchId, aiGenerated: true, text: "Seguimiento",
+      };
+      if (conMensajes) {
+        const entregas = await Promise.all([encolarEnvioWhatsAppZernio(salida), encolarEnvioWhatsAppZernio(salida)]);
+        expect(entregas[0]).toBe(entregas[1]);
+        const [total] = await sql`select count(*)::int as n from zernio_whatsapp_outbox where source_dispatch_id=${dispatchId}`;
+        expect(total?.n).toBe(1);
+      }
+      if (!conMensajes) {
+        await sql`insert into message(id,organization_id,conversation_id,scope_kind,direction,type,text,status)
+          values(${randomUUID()},${org},${sesion!.conversation_id},'commercial','in','text','Mensaje comercial nuevo','delivered')`;
+        expect(await contextoDeReanudacion(org, sesion!.conversation_id, dispatchId)).toBeNull();
+        expect(await construirEvento(fila!)).toEqual(payload);
+      }
+      await sql`update demo_identity_route set generation=generation+1 where organization_id=${org} and identity_lookup=${sesion!.phone_lookup}`;
+      expect(await contextoDeReanudacion(org, sesion!.conversation_id, dispatchId)).toBeNull();
+      expect(await construirEvento(fila!)).toBeNull();
+      await expect(encolarEnvioWhatsAppZernio({
+        ...salida, requestKey: randomUUID(),
+      })).rejects.toThrow("Despacho de origen no válido");
+    } finally { programar.mockRestore(); vi.unstubAllEnvs(); }
+  });
 
   it("enlaza solo la identidad esperada, fija asistente, aísla duplicados, cambia de demo y restituye con corte", async () => {
     const pizza = await invitacion("pizza");
@@ -381,6 +449,9 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       const [blocked] = await sql`select mode,generation from demo_identity_route where organization_id=${org}`;
       expect(blocked!.mode).toBe("blocked");
       const [end] = await sql`select id from zernio_whatsapp_outbox where request_key=${"demo-notice:" + linked!.id + ":ended"}`;
+      const [endMessage] = await sql`select m.text from zernio_whatsapp_outbox j
+        join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id) where j.id=${end!.id}`;
+      expect(endMessage?.text).toBe("¡Listo! 🎉 Gracias por probar NOVA. 😊\n\nEspero que hayas disfrutado la experiencia. ¡Esto es solo una muestra de lo que podemos hacer por tu negocio!\n\nEn un momento retomamos nuestra charla con Lukas para seguir platicando. 🙌");
       await expect(restituirWhatsApp(actor, "pizza", linked!.web_session_id, blocked!.generation)).rejects.toMatchObject({ code: "thread_busy" });
       await sql`update zernio_whatsapp_outbox set status='iniciado',leased_until=clock_timestamp()-interval '1 second' where id=${end!.id}`;
       await recuperarSalidasInciertasZernio(org);

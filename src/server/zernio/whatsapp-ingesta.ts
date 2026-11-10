@@ -5,6 +5,7 @@ import { obtenerZernioWhatsAppPorCuenta } from "@/server/zernio/whatsapp-credenc
 import { normalizarEntranteWhatsAppZernio, permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
 import { procesarSalienteWhatsAppZernio } from "@/server/zernio/whatsapp-saliente";
 import { resolverIngresoComercialWhatsApp } from "@/server/demo-center/infra/whatsapp-selector";
+import { caducarDemosConversacionales } from "@/server/demo-center/infra/whatsapp-lifecycle";
 
 /** El worker solo recibe eventos autenticados y guardados por la ruta. */
 export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<void> {
@@ -14,10 +15,13 @@ export async function procesarEntranteWhatsAppZernio(payload: unknown): Promise<
   const cred = await obtenerZernioWhatsAppPorCuenta(accountRef);
   if (!cred) throw new Error("Conexión de WhatsApp no disponible");
   if(['message.delivered','message.read','message.failed'].includes(evento.event)){
-    const [known]=await getSql()`select m.id from message m join conversation c on c.id=m.conversation_id and c.organization_id=m.organization_id
+    const [known]=await getSql()`select m.id,m.scope_kind from message m join conversation c on c.id=m.conversation_id and c.organization_id=m.organization_id
      where m.organization_id=${cred.organizationId} and m.wa_message_id=${evento.message.platformMessageId} and m.direction='out' and c.channel_thread_ref=${evento.conversation.id}`;
     if(!known)throw new Error('Confirmación aún no correlacionada');
     await applyStatusUpdate(cred.organizationId,{id:evento.message.platformMessageId,status:evento.event.split('.')[1] as 'delivered'|'read'|'failed',timestamp:String(Math.floor(Date.parse(evento.statusAt!)/1000))});
+    if (known.scope_kind === "demo") await caducarDemosConversacionales().catch(error => {
+      console.warn("No se pudo evaluar el retorno tras la confirmación de WhatsApp", error instanceof Error ? error.name : "Error");
+    });
     return;
   }
   if (evento.event === "message.sent") {

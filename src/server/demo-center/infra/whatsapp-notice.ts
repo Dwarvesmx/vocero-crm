@@ -15,13 +15,17 @@ export async function encolarAvisoDemo(sql: TransactionSql, org: string, session
   const request = `demo-notice:${session}:${kind}`;
   const text = kind === "started" ?
     `Empezó la demo con ${s.name}. Escribe tu primera pregunta. Si quieres salir, escribe TERMINAR DEMO.` :
-    "La demostración terminó. ModoNext puede ayudarte a continuar con la atención comercial una vez revisada esta conversación.";
+    `¡Listo! 🎉 Gracias por probar ${s.name}. 😊\n\nEspero que hayas disfrutado la experiencia. ¡Esto es solo una muestra de lo que podemos hacer por tu negocio!\n\nEn un momento retomamos nuestra charla con Lukas para seguir platicando. 🙌`;
   const [prior] = await sql`select j.id,j.account_ref,j.thread_ref,j.conversation_id,m.text,m.demo_session_id
     from zernio_whatsapp_outbox j join message m on (m.organization_id,m.id)=(j.organization_id,j.message_id)
     where j.organization_id=${org} and j.request_key=${request}`;
   if (prior) {
+    const avisoAnterior = kind === "ended" && [
+      "La demostración terminó. ModoNext puede ayudarte a continuar con la atención comercial una vez revisada esta conversación.",
+      "La demostración terminó. Gracias por probarla. Enseguida continuamos nuestra conversación.",
+    ].includes(prior.text);
     if (prior.account_ref !== account || prior.thread_ref !== thread || prior.conversation_id !== s.conversation_id ||
-        prior.demo_session_id !== session || prior.text !== text) throw new SimulatorError("delivery_conflict");
+        prior.demo_session_id !== session || (prior.text !== text && !avisoAnterior)) throw new SimulatorError("delivery_conflict");
     return String(prior.id);
   }
   const message = randomUUID(), job = randomUUID();

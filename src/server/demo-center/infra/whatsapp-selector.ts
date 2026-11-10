@@ -131,13 +131,14 @@ async function asignar(sql: TransactionSql, org: string, cuenta: string, evento:
   return "linked";
 }
 
-async function encolar(sql: TransactionSql, org: string, evento: EventoWhatsAppZernio, conv: string, sesion?: Row) {
+async function encolar(sql: TransactionSql, org: string, evento: EventoWhatsAppZernio, conv: string, sesion?: Row,
+  generacionTransicion?: number) {
   const texto = evento.message.text?.trim();
   if (!texto) return;
   const [m] = await sql`insert into message(id,organization_id,conversation_id,wa_message_id,direction,type,text,status,wa_timestamp,
     scope_kind,demo_session_id,route_generation)
     values(${randomUUID()},${org},${conv},${evento.message.platformMessageId},'in','text',${texto},'delivered',
-      ${evento.message.sentAt}::timestamptz,${sesion ? "demo" : "blocked"},${sesion?.id ?? null},${sesion?.route_generation ?? null})
+      ${evento.message.sentAt}::timestamptz at time zone 'UTC',${sesion ? "demo" : "blocked"},${sesion?.id ?? null},${sesion?.route_generation ?? generacionTransicion ?? null})
     on conflict(wa_message_id) do nothing returning id`;
   if (!m || !sesion) return;
   await sql`insert into dispatch(id,organization_id,conversation_id,scope_kind,demo_session_id,route_generation,status,message_ids,
@@ -181,7 +182,9 @@ async function seleccionar(sql: TransactionSql, org: string, cuenta: string, eve
   const [r] = await sql`select * from demo_identity_route where organization_id=${org} and channel='whatsapp' and identity_lookup=${link.phone_lookup} for update`;
   if (r?.mode === "commercial" && r.blocked_since && posteriorAlCorte(evento.message.sentAt, new Date(r.blocked_since), ahora)) return "commercial";
   if (r?.mode !== "demo") {
-    await encolar(sql, org, evento, link.conversation_id);
+    const duranteTransicion = r?.mode === "blocked" && permiteDespachoWhatsAppZernio(evento) &&
+      posteriorAlCorte(evento.message.sentAt, new Date(r.blocked_since), ahora) && !finDemo(evento.message.text);
+    await encolar(sql, org, evento, link.conversation_id, undefined, duranteTransicion ? Number(r.generation) : undefined);
     return "blocked";
   }
   const [s] = await sql`select s.*,l.linked_at,b.expires_at as binding_expiry,a.expires_at as auth_expiry,

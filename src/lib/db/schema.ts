@@ -1314,6 +1314,7 @@ export const dispatch = pgTable(
     demoSessionId: text("demo_session_id"),
     routeGeneration: integer("route_generation"),
     commercialTraceGeneration: integer("commercial_trace_generation"),
+    commercialResumeEnvelope: jsonb("commercial_resume_envelope"),
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversation.id, { onDelete: "cascade" }),

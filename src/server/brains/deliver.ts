@@ -19,6 +19,7 @@ import { leerConfigDespacho } from "@/server/brains/config";
 import type { FilaDespacho } from "@/server/dispatch/outbox";
 import { isWindowOpen, windowExpiresAt } from "@/server/inbox/window";
 import { windowMsFor } from "@/server/channels/capabilities";
+import { contextoDeReanudacion, esReanudacionComercial, fijarSobreDeReanudacion } from "./commercial-resume";
 
 /**
  * 021 — Entrega de un despacho al cerebro: leer la ráfaga, armar el evento y
@@ -239,8 +240,16 @@ export async function construirEvento(
     conv.id,
     fila.messageIds ?? []
   );
+  const resume = esReanudacionComercial(fila.id)
+    ? await contextoDeReanudacion(fila.organizationId, fila.conversationId, fila.id, true) : null;
+  if (esReanudacionComercial(fila.id) && !resume) return null;
+  const porId = new Map(messages.map(m => [m.id, m]));
+  const mensajesDeContinuacion = (fila.messageIds ?? []).flatMap(id => {
+    const mensaje = porId.get(id);
+    return mensaje ? [mensaje] : [];
+  });
 
-  return armarEvento({
+  const evento = armarEvento({
     dispatchId: fila.id,
     organization: org,
     conversation: {
@@ -264,10 +273,11 @@ export async function construirEvento(
       displayName: contact.name,
       identity: contact.waIdentity,
     },
-    messages,
+    messages: resume ? mensajesDeContinuacion.slice(0, 100) : messages,
     firstMessageAt: fila.firstMessageAt,
     lastMessageAt: fila.lastMessageAt,
   });
+  return resume ? fijarSobreDeReanudacion({ ...evento, type: "commercial.resume", resume }) : evento;
 }
 
 /**

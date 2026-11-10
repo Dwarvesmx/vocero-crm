@@ -124,4 +124,14 @@ El intento con `6e08031` registró `thread_busy`. En ese momento quedaban cinco 
 
 El piloto real posterior recibió la oferta, inició NOVA, tuvo cuatro respuestas y cerró con aviso recibido. El CRM mostró cuatro operaciones por USD 0.001408 y cuarentena. Una consulta del propietario identificó dos salidas `sent` sin confirmación. IMPLEMENTADO LOCALMENTE: el barrido de cierres conversa con Zernio para conciliar salidas aceptadas por ID exacto antes de evaluar la restitución. PostgreSQL descartable 3/3 acredita que la cuarentena continúa sin evidencia y que se restituye al confirmar. Pendiente de validación real.
 
+El propietario confirmó que la cuarentena desapareció y Lukas respondió posteriormente. IMPLEMENTADO LOCALMENTE: el aviso final agradece la prueba y anuncia la continuación sin mencionar una revisión interna. La prueba integrada PostgreSQL pasó 3/3. El mensaje de interés comercial inmediato y el tratamiento de respuestas recibidas durante cuarentena siguen pendientes de implementación y validación. El aviso nuevo no está desplegado.
+
+El aviso local se ajustó al texto aprobado con el nombre del asistente. El reintento reconoce avisos finales históricos sin cambiarlos. PostgreSQL descartable 3/3. Las entradas guardadas en ámbito `blocked` no tienen despacho comercial, y el contrato actual de Nea rechaza despachos sin mensajes. La continuación contextual y la recuperación de preguntas siguen pendientes; no hay commit ni imagen nueva para este ajuste.
+
 Comprobado con TypeScript y la integración existente de PostgreSQL descartable y WhatsApp controlado (3/3). La aceptación real se realiza después de autorizar y desplegar las imágenes verificadas.
+
+### Reanudación comercial tras el cierre
+
+PROBADO en PostgreSQL 16 descartable con webhook firmado (2/2). La restitución segura encola un despacho comercial por sesión en la misma transacción. Recupera entradas verificadas de la generación de cuarentena con sus IDs originales y conserva su orden. Si no hay entradas, el despacho firmado `commercial.resume` permite continuar con el historial comercial. La migración aditiva 0044 fija el sobre del despacho para reintentos con el mismo contenido.
+
+Una entrada comercial posterior suprime el saludo proactivo y una generación obsoleta invalida el despacho y su salida. Los mensajes históricos sin trazabilidad de la transición conservan su aislamiento. Las comprobaciones de entrega y operaciones inciertas siguen condicionando la restitución. TypeScript y `git diff --check` aprobados. La aceptación por WhatsApp queda pendiente.

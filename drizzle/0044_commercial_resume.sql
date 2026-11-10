@@ -1,0 +1,1 @@
+ALTER TABLE "dispatch" ADD COLUMN "commercial_resume_envelope" jsonb;

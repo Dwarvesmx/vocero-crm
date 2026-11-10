@@ -101,9 +101,10 @@ export async function cerrarVinculoWhatsAppEnTx(sql: TransactionSql, org: string
 
 export async function restituirWhatsApp(actor: {organizationId: string; userId: string}, spaceId: string, webId: string, generation: number) {
   const org = actor.organizationId;
-  await getSql().begin(async sql => {
+  const encolado = await getSql().begin(async sql => {
     await sql`select id from organization where id=${org} for update`;
-    const [r] = await sql`select r.*,s.conversation_id,l.linked_at from demo_whatsapp_link l
+    const [r] = await sql`select r.*,s.conversation_id,s.id as external_session_id,s.route_generation as demo_generation,
+      l.linked_at,l.account_ref,l.thread_ref from demo_whatsapp_link l
       join demo_session s on (s.organization_id,s.id)=(l.organization_id,l.external_session_id)
       join demo_identity_route r on r.organization_id=l.organization_id and r.identity_lookup=l.phone_lookup and r.channel='whatsapp'
       where l.organization_id=${org} and l.space_id=${spaceId} and l.web_session_id=${webId}
@@ -111,7 +112,11 @@ export async function restituirWhatsApp(actor: {organizationId: string; userId: 
         and posterior.phone_lookup=l.phone_lookup and posterior.linked_at>l.linked_at) for update of r`;
     if (!r) throw new SimulatorError("not_found", 404);
     if (r.mode !== "blocked" || r.generation !== generation) throw new SimulatorError("request_conflict");
-    const [conv] = await sql`select id from conversation where organization_id=${org} and id=${r.conversation_id} for update`;
+    const [conv] = await sql`select c.id,c.channel_thread_ref,t.wa_identity,
+      c.ai_enabled and not c.is_test and not t.ai_paused and c.handoff_at is null
+        and c.handoff_pending_message_id is null and c.channel='whatsapp' as disponible
+      from conversation c join contact t on (t.organization_id,t.id)=(c.organization_id,c.contact_id)
+      where c.organization_id=${org} and c.id=${r.conversation_id} for update of c`;
     if (!conv) throw new SimulatorError("not_found", 404);
     const [trabajo] = await sql`select 1 from zernio_whatsapp_outbox where organization_id=${org} and conversation_id=${conv.id}
       and status in ('pendiente','procesando','retenido','iniciado','incierto')
@@ -124,10 +129,52 @@ export async function restituirWhatsApp(actor: {organizationId: string; userId: 
       union all select 1 from demo_usage_operation o join demo_session s on (s.organization_id,s.id)=(o.organization_id,o.session_id)
       where o.organization_id=${org} and s.conversation_id=${conv.id} and o.status in ('reserved','uncertain') limit 1`;
     if (trabajo) throw new SimulatorError("thread_busy");
-    await sql`update demo_identity_route set mode='commercial',generation=generation+1,blocked_since=clock_timestamp(),
-      blocked_reason=null,review_due_at=null where id=${r.id}`;
+    const [corte] = await sql`update demo_identity_route set mode='commercial',generation=generation+1,blocked_since=clock_timestamp(),
+      blocked_reason=null,review_due_at=null where id=${r.id} returning generation,blocked_since`;
     const id = randomUUID();
     await sql`insert into demo_admin_audit(id,organization_id,space_id,actor_user_id,action,target_id,reason_code,request_id,result)
       values(${id},${org},${spaceId},${actor.userId},'whatsapp_commercial_restored',${r.id},'reviewed_pending_work',${id},'success')`;
+    if (!r.thread_ref || conv.channel_thread_ref !== r.thread_ref ||
+        externalIdentityLookup(org, r.account_ref, "phone", conv.wa_identity) !== r.identity_lookup ||
+        Number(r.generation) !== Number(r.demo_generation) + 1 ||
+        !["prospect_finished", "session_deadline", "inbound_quota", "generation_quota"].includes(r.blocked_reason)) return false;
+
+    const [cuenta] = await sql`select 1 from zernio_whatsapp_credentials
+      where organization_id=${org} and account_ref=${r.account_ref} and enabled`;
+    if (!cuenta) return false;
+    // Estas filas llevan la generación de la cuarentena asignada tras verificar el webhook y el hilo.
+    const mensajes = await sql<{ id: string }[]>`with recuperados as (
+      update message m set scope_kind='commercial',route_generation=null
+      where organization_id=${org} and conversation_id=${conv.id} and scope_kind='blocked' and direction='in'
+        and route_generation=${r.generation} and wa_message_id is not null
+        and m.created_at >= (${r.blocked_since}::timestamptz at time zone 'UTC')
+        and exists(select 1 from webhook_event w where w.organization_id=${org} and w.fuente='zernio_whatsapp'
+          and w.huella=encode(sha256(convert_to('zernio-whatsapp-in:v1:'||${r.account_ref}||':'||m.wa_message_id,'UTF8')),'hex')
+          and w.payload->'account'->>'accountId'=${r.account_ref} and w.payload->'conversation'->>'id'=${r.thread_ref}
+          and w.payload->>'result'='blocked')
+      returning id,wa_timestamp,created_at
+    ) select id from recuperados order by wa_timestamp,created_at,id`;
+    const ids = JSON.stringify(mensajes.map(m => m.id));
+    const [ventana] = await sql`update conversation c set last_inbound_at=greatest(c.last_inbound_at,
+      (select max((e.metadata->>'inboundAt')::timestamptz) at time zone 'UTC' from demo_session_event e
+       where e.organization_id=${org} and e.session_id=${r.external_session_id} and e.type='whatsapp_lifecycle_notice'),
+      (select max(m.wa_timestamp) from message m where m.organization_id=${org} and m.id in (select jsonb_array_elements_text(${sql.typed(ids,25)}::jsonb))))
+      where c.organization_id=${org} and c.id=${conv.id}
+      returning last_inbound_at > (clock_timestamp() at time zone 'UTC') - interval '24 hours' as abierta`;
+    if (!conv.disponible || !ventana?.abierta || process.env.ZERNIO_NEA_DISPATCH_ENABLED !== "true") return false;
+    const [perfil] = await sql`select 1 from agent_profile where organization_id=${org} and enabled`;
+    if (!perfil) return false;
+    await sql`insert into dispatch(id,organization_id,conversation_id,scope_kind,status,not_before,first_message_at,last_message_at,
+        message_ids,commercial_trace_generation)
+      values(${'resume:' + r.external_session_id},${org},${conv.id},'commercial','pendiente',clock_timestamp(),
+        (${corte!.blocked_since}::timestamptz at time zone 'UTC') + interval '1 millisecond',clock_timestamp(),
+        ${sql.typed(ids,25)}::jsonb,${corte!.generation})
+      on conflict (conversation_id) where scope_kind='commercial' and status in ('pendiente','en_vuelo')
+      do update set message_ids=coalesce(dispatch.message_ids,'[]'::jsonb) || excluded.message_ids`;
+    return true;
   });
+  if (encolado) {
+    const { programarTanda } = await import("@/server/dispatch/worker");
+    programarTanda(new Date());
+  }
 }

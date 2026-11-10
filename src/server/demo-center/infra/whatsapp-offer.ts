@@ -97,7 +97,7 @@ export async function ofrecerDemoWhatsApp(org: string, conversation: string, dis
         [space.sector,space.name,space.commercial_name,space.assistant].some(s => clave(String(s)) === clave(sector))) && !matches.length)
         throw new SimulatorError("authorization_unavailable", 403);
       return { status: "choose", options: eligible.map(({space}) => ({
-        id: String(space.id), sector: space.sector, demo: space.name, assistant: space.assistant,
+        id: String(space.id), sector: space.sector, demo: space.name, commercialName: space.commercial_name, assistant: space.assistant,
       })) };
     }
     const { space: p, permission } = matches[0]!;

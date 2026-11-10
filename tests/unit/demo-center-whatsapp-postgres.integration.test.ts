@@ -258,7 +258,8 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       }));
       expect((await offer("NOVA", "invalid")).status).toBe(401);
       expect((await offer("NOVA", process.env.BOT_API_KEY, "otra-conversacion")).status).toBe(403);
-      expect(await (await offer("sector desconocido")).json()).toMatchObject({ status: "choose", options: [{ id: "pizza", demo: "NOVA" }] });
+      expect(await (await offer("sector desconocido")).json()).toMatchObject({ status: "choose",
+        options: [{ id: "pizza", demo: "NOVA", commercialName: "NOVA" }] });
       const [authorized] = await sql`select id from demo_authorization where organization_id=${org} and space_id='pizza' and state='active'`;
       expect(authorized).toBeTruthy();
       await sql`update demo_authorization set state='revoked' where id=${authorized!.id}`;

@@ -273,15 +273,17 @@ async function conciliarSalidasComerciales(org: string, cuenta: string, hilo: st
     join message m on (m.organization_id,m.id,m.conversation_id)=(j.organization_id,j.message_id,j.conversation_id)
     where j.organization_id=${org} and j.account_ref=${cuenta} and j.thread_ref=${hilo} and j.status='completado'
     and m.scope_kind='commercial' and m.direction='out' and m.status='sent' and m.wa_message_id is not null
-    order by j.updated_at desc limit 6`;
-  await Promise.allSettled(salidas.map(async salida => {
-    const confirmacion = await consultarConfirmacionDemoZernio({ organizationId: org, accountRef: cuenta, threadRef: hilo,
-      requestKey: salida.request_key, messageId: salida.wa_message_id }, true);
-    if (!confirmacion || confirmacion.messageId !== salida.wa_message_id || confirmacion.status === 'sent') return;
-    await sql`update message set status=${confirmacion.status}
-      where organization_id=${org} and id=${salida.id} and wa_message_id=${confirmacion.messageId}
-      and scope_kind='commercial' and direction='out' and status='sent'`;
-  }));
+    order by j.updated_at desc limit 30`;
+  for (let inicio = 0; inicio < salidas.length; inicio += 6) {
+    await Promise.allSettled(salidas.slice(inicio, inicio + 6).map(async salida => {
+      const confirmacion = await consultarConfirmacionDemoZernio({ organizationId: org, accountRef: cuenta, threadRef: hilo,
+        requestKey: salida.request_key, messageId: salida.wa_message_id }, true);
+      if (!confirmacion || confirmacion.messageId !== salida.wa_message_id || confirmacion.status === 'sent') return;
+      await sql`update message set status=${confirmacion.status}
+        where organization_id=${org} and id=${salida.id} and wa_message_id=${confirmacion.messageId}
+        and scope_kind='commercial' and direction='out' and status='sent'`;
+    }));
+  }
 }
 
 const conciliarAntesDeConsentir = Symbol("conciliarAntesDeConsentir");

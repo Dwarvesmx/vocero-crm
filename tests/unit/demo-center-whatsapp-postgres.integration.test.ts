@@ -38,6 +38,7 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("next/server", async original => ({ ...await original<typeof import("next/server")>(), after: vi.fn() }));
 const efectos = vi.hoisted(() => ({ generadas: 0, salidas: 0, avisos: 0, receipt: null as null | {messageId:string;status:"delivered"} }));
+const confirmacionesComerciales = vi.hoisted(() => ({ enabled: false }));
 vi.mock("@/server/demo-center/infra/finance", async original => ({
   ...await original<typeof import("@/server/demo-center/infra/finance")>(),
   configuredDemoProvider: async () => ({
@@ -57,7 +58,8 @@ vi.mock("@/server/demo-center/infra/finance", async original => ({
   }),
 }));
 vi.mock("@/server/zernio/whatsapp-envio", () => ({
-  consultarConfirmacionDemoZernio: async () => efectos.receipt,
+  consultarConfirmacionDemoZernio: async ({ messageId }: { messageId: string }) =>
+    confirmacionesComerciales.enabled ? { messageId, status: "delivered" } : efectos.receipt,
   enviarTextoWhatsAppZernio: async ({ cuentaAutorizada, conversationId, texto }: Record<string, string>) => {
     expect(cuentaAutorizada).toBe("wa-account");
     expect(conversationId).toBe("wa-thread");
@@ -305,16 +307,26 @@ describe.skipIf(process.env.DEMO_WA_TEST !== "1")("WhatsApp Zernio firmado, sele
       await sql`update demo_authorization set state='active' where id=${authorized!.id}`;
       const providerMessageId = "wamid-commercial-offer-synthetic";
       await sql`update message set status='sent',wa_message_id=${providerMessageId} where id=${outbound}`;
+      for (let i = 0; i < 12; i++) {
+        const message = randomUUID();
+        await sql`insert into message(id,organization_id,conversation_id,wa_message_id,direction,type,text,status)
+          values(${message},${org},${conv!.id},${`commercial-${i}`},'out','text','Mensaje anterior','sent')`;
+        await sql`insert into zernio_whatsapp_outbox(id,organization_id,conversation_id,message_id,account_ref,thread_ref,request_key,status)
+          values(${randomUUID()},${org},${conv!.id},${message},${cuenta},${hilo},${`commercial-request-${i}`},'completado')`;
+      }
       const blockedConsent = evento("ACEPTO DEMO");
       await enviar(blockedConsent);
       const [blockedResult] = await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${blockedConsent.id}`;
       expect(blockedResult?.result).toBe("thread_busy");
-      efectos.receipt = { messageId: providerMessageId, status: "delivered" };
+      confirmacionesComerciales.enabled = true;
       const consent = evento("ACEPTO DEMO");
       try { expect((await enviar(consent)).status).toBe(200); }
-      finally { efectos.receipt = null; }
+      finally { confirmacionesComerciales.enabled = false; }
       const [reconciliado] = await sql`select status from message where id=${outbound}`;
       expect(reconciliado?.status).toBe("delivered");
+      const [pendientesComerciales] = await sql`select count(*)::int as total from message
+        where organization_id=${org} and conversation_id=${conv!.id} and direction='out' and status='sent'`;
+      expect(pendientesComerciales?.total).toBe(0);
       expect((await enviar({ ...consent, id: randomUUID() })).status).toBe(200);
       const [verdict] = await sql`select payload->>'result' as result from webhook_event where payload->>'id'=${consent.id}`;
       expect(verdict?.result).toBe("linked");

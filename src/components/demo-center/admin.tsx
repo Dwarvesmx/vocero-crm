@@ -229,7 +229,7 @@ export function DemoCenterAdmin({ spaces, detail, globalPolicy, exceptions, know
             } }, !space, event.currentTarget);
           }}>
             <h2 className="font-semibold">{space ? "Límites del espacio" : "Límites globales de Demo Center"}</h2>
-            <p className="text-sm text-muted-foreground">Configuración administrativa. El motor de cuotas se incorporará en una fase posterior. La ventana determina el periodo de sesiones iniciadas. Las políticas global y del espacio se aplicarán conjuntamente. Cero y el presupuesto por sesión vacío aún requieren definición operativa. La zona horaria es la del navegador.</p>
+            <p className="text-sm text-muted-foreground">Demo Center aplica estas cuotas y presupuestos durante la operación. La ventana determina el periodo de sesiones iniciadas. Las políticas global y del espacio se aplicarán conjuntamente. Cero y el presupuesto por sesión vacío aún requieren definición operativa. La zona horaria es la del navegador.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {limitCounters.map(([key, label]) => <label key={key}>{label}<input className={inputStyle} name={key}
                 type="number" required min={0} step="any" max={key === "maxDurationSeconds" || key === "maxIdleSeconds" ? 35791394 : 2147483647} defaultValue={(policy?.[key] ?? 0) / (key === "maxDurationSeconds" || key === "maxIdleSeconds" ? 60 : 1)} /></label>)}

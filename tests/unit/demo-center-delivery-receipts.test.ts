@@ -1,6 +1,6 @@
 import {beforeEach,it,expect,vi} from 'vitest';
 import {zernioFetch} from '@/server/zernio';
-import {consultarConfirmacionDemoZernio} from '@/server/zernio/whatsapp-envio';
+import {consultarConfirmacionDemoZernio, consultarConfirmacionesZernio} from '@/server/zernio/whatsapp-envio';
 import {isCommercialScope} from '@/server/inbox/message-scope';
 vi.mock('@/server/zernio',()=>({zernioFetch:vi.fn()}));
 vi.mock('@/server/zernio/whatsapp-credenciales',()=>({obtenerZernioWhatsAppPorOrg:async()=>({accountRef:'account',token:'synthetic'})}));
@@ -19,4 +19,17 @@ it('rechaza cuenta/hilo/dirección ajenos e IDs ambiguos',async()=>{
  }
 });
 it('fallo de lectura conserva incertidumbre sin nuevo POST',async()=>{vi.mocked(zernioFetch).mockRejectedValue(Error('synthetic timeout'));expect(await consultarConfirmacionDemoZernio(input)).toBeNull();expect(zernioFetch).toHaveBeenCalledTimes(1);});
+it('consulta el historial una vez por página y confirma solo los IDs del hilo', async () => {
+  vi.mocked(zernioFetch)
+    .mockResolvedValueOnce({ messages: [message], pagination: { hasMore: true, nextCursor: 'siguiente' } })
+    .mockResolvedValueOnce({ messages: [
+      { ...message, id: 'antiguo', deliveryStatus: 'read' },
+      { ...message, id: 'ajeno', conversationId: 'otro-hilo' },
+    ], pagination: { hasMore: false, nextCursor: null } });
+  expect(await consultarConfirmacionesZernio(input, ['wamid', 'antiguo', 'ajeno'])).toEqual(new Map([
+    ['wamid', 'delivered'], ['antiguo', 'read'],
+  ]));
+  expect(zernioFetch).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(zernioFetch).mock.calls[1]?.[0]).toContain('cursor=siguiente');
+});
 it('compatibilidad comercial explícita sin reclasificar estados demo/blocked',()=>{expect(isCommercialScope(null)).toBe(true);expect(isCommercialScope(undefined)).toBe(true);expect(isCommercialScope('commercial')).toBe(true);expect(isCommercialScope('demo')).toBe(false);expect(isCommercialScope('blocked')).toBe(false);});

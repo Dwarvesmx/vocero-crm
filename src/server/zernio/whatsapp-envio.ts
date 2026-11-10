@@ -37,26 +37,67 @@ export async function enviarTextoWhatsAppZernio(input: {
   return parsed.data.data.messageId;
 }
 
-/** Consulta acotada al hilo/cuenta y al ID exacto ya confirmado; nunca asocia por texto.
- * Sin ID tras ACK perdido no existe correlación demostrada: conservar incertidumbre.
- */
-export async function consultarConfirmacionDemoZernio(input:{organizationId:string;accountRef:string;threadRef:string;requestKey:string;messageId:string|null}, consultaBreve = false):Promise<{messageId:string;status:'sent'|'delivered'|'read'|'failed'}|null>{
- if(!input.messageId)return null;
- const {obtenerZernioWhatsAppPorOrg}=await import("./whatsapp-credenciales");
- const cred=await obtenerZernioWhatsAppPorOrg(input.organizationId);
- if(!cred||cred.accountRef!==input.accountRef)return null;
- const pageSchema=z.object({messages:z.array(z.object({id:z.string(),accountId:z.string(),conversationId:z.string(),platform:z.string(),direction:z.string(),deliveryStatus:z.string().nullable().optional()})),pagination:z.object({hasMore:z.boolean().optional(),nextCursor:z.string().nullable().optional()}).optional()});
- let cursor:string|undefined;
- try{
-  for(let page=0;page<(consultaBreve ? 1 : 3);page++){
-   const query=new URLSearchParams({accountId:input.accountRef,sortOrder:'desc',limit:'50'});if(cursor)query.set('cursor',cursor);
-   const data=pageSchema.safeParse(await zernioFetch(`/inbox/conversations/${encodeURIComponent(input.threadRef)}/messages?${query}`,{token:cred.token,method:'GET',timeoutMs:consultaBreve ? 1500 : 15000}));
-   if(!data.success)return null;
-   const exact=data.data.messages.filter(m=>m.id===input.messageId&&m.accountId===input.accountRef&&m.conversationId===input.threadRef&&m.platform==='whatsapp'&&m.direction==='outgoing');
-   if(exact.length===1&&['sent','delivered','read','failed'].includes(exact[0]!.deliveryStatus??''))return {messageId:input.messageId,status:exact[0]!.deliveryStatus as 'sent'|'delivered'|'read'|'failed'};
-   if(exact.length>1||!data.data.pagination?.hasMore||!data.data.pagination.nextCursor||data.data.pagination.nextCursor===cursor)return null;
-   cursor=data.data.pagination.nextCursor;
+type HiloZernio = { organizationId: string; accountRef: string; threadRef: string };
+const estadoConfirmacion = z.enum(["sent", "delivered", "read", "failed"]);
+type EstadoConfirmacion = z.infer<typeof estadoConfirmacion>;
+const paginaMensajes = z.object({
+  messages: z.array(z.object({
+    id: z.string(), accountId: z.string(), conversationId: z.string(), platform: z.string(),
+    direction: z.string(), deliveryStatus: z.string().nullish(),
+  })),
+  pagination: z.object({ hasMore: z.boolean().optional(), nextCursor: z.string().nullish() }).optional(),
+});
+
+/** Una búsqueda por hilo para todos los IDs del lote. No asocia mensajes por texto. */
+export async function consultarConfirmacionesZernio(hilo: HiloZernio, ids: string[], timeoutMs = 2500) {
+  const pendientes = new Set(ids);
+  const confirmaciones = new Map<string, EstadoConfirmacion>();
+  if (!pendientes.size) return confirmaciones;
+
+  const { obtenerZernioWhatsAppPorOrg } = await import("./whatsapp-credenciales");
+  const cred = await obtenerZernioWhatsAppPorOrg(hilo.organizationId);
+  if (!cred || cred.accountRef !== hilo.accountRef) return confirmaciones;
+
+  const cursores = new Set<string>();
+  let cursor: string | undefined;
+  for (let pagina = 0; pagina < 3 && pendientes.size; pagina++) {
+    const query = new URLSearchParams({ accountId: hilo.accountRef, sortOrder: "desc", limit: "100" });
+    if (cursor) query.set("cursor", cursor);
+    let respuesta: unknown;
+    try {
+      respuesta = await zernioFetch(`/inbox/conversations/${encodeURIComponent(hilo.threadRef)}/messages?${query}`,
+        { token: cred.token, method: "GET", timeoutMs });
+    } catch (error) {
+      console.warn("No se pudo consultar el historial de Zernio", {
+        pagina: pagina + 1, status: error instanceof MetaApiError ? error.status : undefined,
+      });
+      break;
+    }
+    const datos = paginaMensajes.safeParse(respuesta);
+    if (!datos.success) {
+      console.warn("Respuesta de historial de Zernio inválida", { pagina: pagina + 1 });
+      break;
+    }
+    for (const id of pendientes) {
+      const exactos = datos.data.messages.filter(m => m.id === id && m.accountId === hilo.accountRef &&
+        m.conversationId === hilo.threadRef && m.platform === "whatsapp" && m.direction === "outgoing");
+      if (!exactos.length) continue;
+      pendientes.delete(id);
+      if (exactos.length !== 1) continue;
+      const estado = estadoConfirmacion.safeParse(exactos[0]?.deliveryStatus);
+      if (estado.success) confirmaciones.set(id, estado.data);
+    }
+    const siguiente = datos.data.pagination?.nextCursor;
+    if (!datos.data.pagination?.hasMore || !siguiente || cursores.has(siguiente)) break;
+    cursores.add(siguiente);
+    cursor = siguiente;
   }
- }catch{/* Una consulta fallida no autoriza un nuevo envío. */}
- return null;
+  return confirmaciones;
+}
+
+export async function consultarConfirmacionDemoZernio(input: HiloZernio & { requestKey: string; messageId: string | null }) {
+  if (!input.messageId) return null;
+  const confirmaciones = await consultarConfirmacionesZernio(input, [input.messageId], 15000);
+  const status = confirmaciones.get(input.messageId);
+  return status ? { messageId: input.messageId, status } : null;
 }

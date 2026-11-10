@@ -5,7 +5,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
 import { huellaDe } from "@/server/webhooks/eventos";
 import { permiteDespachoWhatsAppZernio, type EventoWhatsAppZernio } from "@/server/zernio/whatsapp-evento";
-import { consultarConfirmacionDemoZernio } from "@/server/zernio/whatsapp-envio";
+import { consultarConfirmacionesZernio } from "@/server/zernio/whatsapp-envio";
 import { codigoDemoWhatsApp, posteriorAlCorte, telefonoWhatsApp } from "../domain/whatsapp";
 import { externalIdentityLookup, iniciarSesionWhatsApp } from "./external-session";
 import { bloquearRutaWhatsApp, canalDemoWhatsApp, hashCodigo, invalidarPendientesWhatsApp } from "./whatsapp-link";
@@ -269,21 +269,24 @@ export async function resolverIngresoComercialWhatsApp(org: string, cuenta: stri
 
 async function conciliarSalidasComerciales(org: string, cuenta: string, hilo: string) {
   const sql = getSql();
-  const salidas = await sql`select m.id,m.wa_message_id,j.request_key from zernio_whatsapp_outbox j
+  const salidas = await sql<{ id: string; wa_message_id: string }[]>`select m.id,m.wa_message_id from zernio_whatsapp_outbox j
     join message m on (m.organization_id,m.id,m.conversation_id)=(j.organization_id,j.message_id,j.conversation_id)
     where j.organization_id=${org} and j.account_ref=${cuenta} and j.thread_ref=${hilo} and j.status='completado'
     and m.scope_kind='commercial' and m.direction='out' and m.status='sent' and m.wa_message_id is not null
     order by j.updated_at desc limit 30`;
-  for (let inicio = 0; inicio < salidas.length; inicio += 6) {
-    await Promise.allSettled(salidas.slice(inicio, inicio + 6).map(async salida => {
-      const confirmacion = await consultarConfirmacionDemoZernio({ organizationId: org, accountRef: cuenta, threadRef: hilo,
-        requestKey: salida.request_key, messageId: salida.wa_message_id }, true);
-      if (!confirmacion || confirmacion.messageId !== salida.wa_message_id || confirmacion.status === 'sent') return;
-      await sql`update message set status=${confirmacion.status}
-        where organization_id=${org} and id=${salida.id} and wa_message_id=${confirmacion.messageId}
-        and scope_kind='commercial' and direction='out' and status='sent'`;
-    }));
+  const confirmaciones = await consultarConfirmacionesZernio({ organizationId: org, accountRef: cuenta, threadRef: hilo },
+    salidas.map(salida => salida.wa_message_id));
+  const definitivas = [...confirmaciones.values()].filter(estado => estado !== "sent").length;
+  if (salidas.length > definitivas) {
+    console.warn("Conciliación comercial de Zernio incompleta", { consultadas: salidas.length, definitivas });
   }
+  await Promise.all(salidas.map(async salida => {
+    const estado = confirmaciones.get(salida.wa_message_id);
+    if (!estado || estado === "sent") return;
+    await sql`update message set status=${estado}
+      where organization_id=${org} and id=${salida.id} and wa_message_id=${salida.wa_message_id}
+      and scope_kind='commercial' and direction='out' and status='sent'`;
+  }));
 }
 
 const conciliarAntesDeConsentir = Symbol("conciliarAntesDeConsentir");

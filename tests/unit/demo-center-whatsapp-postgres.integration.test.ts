@@ -58,8 +58,9 @@ vi.mock("@/server/demo-center/infra/finance", async original => ({
   }),
 }));
 vi.mock("@/server/zernio/whatsapp-envio", () => ({
-  consultarConfirmacionDemoZernio: async ({ messageId }: { messageId: string }) =>
-    confirmacionesComerciales.enabled ? { messageId, status: "delivered" } : efectos.receipt,
+  consultarConfirmacionDemoZernio: async () => efectos.receipt,
+  consultarConfirmacionesZernio: async (_hilo: unknown, ids: string[]) =>
+    new Map(confirmacionesComerciales.enabled ? ids.map(id => [id, "delivered"] as const) : []),
   enviarTextoWhatsAppZernio: async ({ cuentaAutorizada, conversationId, texto }: Record<string, string>) => {
     expect(cuentaAutorizada).toBe("wa-account");
     expect(conversationId).toBe("wa-thread");

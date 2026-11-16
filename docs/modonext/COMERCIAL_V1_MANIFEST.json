@@ -1,0 +1,394 @@
+{
+  "date": "2026-11-16",
+  "environment": "LOCAL sintético; no desplegado",
+  "branch": "entrega/comercial-v1",
+  "base": "f66a58965963748cbe2575043dd4ffb85e64bbd4",
+  "codeCandidate": "b3ac5d89c9326d687fd6e7faf9e447528f510615",
+  "finalCandidate": "HEAD de entrega/comercial-v1; SHA final registrado en docs/vocero/ESTADO.md del starter local",
+  "changedFiles": [
+    {
+      "status": "M",
+      "path": ".gitignore",
+      "sha256": "03eec0e11632cf0bd2566bc5ee7130cbd1bf4779cb7291f7370996201a175705"
+    },
+    {
+      "status": "A",
+      "path": "docs/modonext/COMERCIAL_V1.md",
+      "sha256": "3e19491b5479aa89905353b127cdfbd9698f3b2283587bc20249a2d5be14d258"
+    },
+    {
+      "status": "M",
+      "path": "docs/modonext/README.md",
+      "sha256": "65e394701014925251d0b52bb288754fbca319597de76d99ebd7563701766374"
+    },
+    {
+      "status": "A",
+      "path": "drizzle/0044_comercial_v1.sql",
+      "sha256": "ae38579f6c428b98e9f322e616feb43013ea52cfad6d573223ccd0042639938a"
+    },
+    {
+      "status": "A",
+      "path": "drizzle/meta/0044_snapshot.json",
+      "sha256": "dd7a04ac421c00213c3e97ae238fb4378f91106493ace62dacfc8513d01df0d2"
+    },
+    {
+      "status": "M",
+      "path": "drizzle/meta/_journal.json",
+      "sha256": "a8261323bcda6a9116946dc8ec66232ff1fdb3b94a3e1b0331ef7ae638697c0d"
+    },
+    {
+      "status": "A",
+      "path": "integrations/nea/comercial_v1.py",
+      "sha256": "546738d03096f031523ded70bf4e7778658755fd4e5c98f6d30774fdfe2a0854"
+    },
+    {
+      "status": "A",
+      "path": "integrations/nea/test_comercial_v1.py",
+      "sha256": "abb18ab39deba0d652a20da8de534a279a38f416f7a2e08c3add2c0e2738d81f"
+    },
+    {
+      "status": "A",
+      "path": "scripts/test-comercial-browser.mjs",
+      "sha256": "6080d40703713cba1047fcbc0eb236b8f359db7808cb8ee4c0caf9fffa8b82ba"
+    },
+    {
+      "status": "A",
+      "path": "scripts/test-comercial-isolated.mjs",
+      "sha256": "9412a8b275033fb20273a645865526bbbc7977d910be5b308831236db72e78d9"
+    },
+    {
+      "status": "A",
+      "path": "scripts/verify-comercial-release.mjs",
+      "sha256": "44fd9803d39b4c346e286256dc48b8c072476bb29a106ecb651e69c6d4ea9d22"
+    },
+    {
+      "status": "A",
+      "path": "specs/comercial-v1/spec.md",
+      "sha256": "f0e740ed47fc5ff2287d13e94dcf18f826e0a94229aec686da22c3c6af640f55"
+    },
+    {
+      "status": "A",
+      "path": "src/app/(app)/comercial/page.tsx",
+      "sha256": "33dc3e83be467cc575ccd6c90a770c41518378d1dd70f22e62d4c848ddccce54"
+    },
+    {
+      "status": "M",
+      "path": "src/app/(app)/layout.tsx",
+      "sha256": "c93908feb7fd4f5d1e49eaa76925890e59538273a3ee118e673444e2c709e24a"
+    },
+    {
+      "status": "A",
+      "path": "src/app/api/bot/comercial/route.ts",
+      "sha256": "8bd31c07114a9d645fabf69259433b8277ed553b9e4ebf1ae64c1ac467f91007"
+    },
+    {
+      "status": "A",
+      "path": "src/app/api/comercial/route.ts",
+      "sha256": "5b40b9063054f9a0a157bec2c985a51258d0fa230b45e1c128a2570cca51b4f3"
+    },
+    {
+      "status": "M",
+      "path": "src/components/app-nav.tsx",
+      "sha256": "fd8affbbe10832a63cb8442730edbe013bbc36288983a314cc9388c64441cb2d"
+    },
+    {
+      "status": "M",
+      "path": "src/components/app-shell.tsx",
+      "sha256": "8be456e1df5cf33b6d7a56e6db9d3bcae0ba7d55506c9ea3d4319043403d4e9e"
+    },
+    {
+      "status": "A",
+      "path": "src/components/comercial/panel.tsx",
+      "sha256": "ccdcc603aa1daaa9c4ae7e853c2c52d04b70480b5aafc259e7c572bdcdc138f2"
+    },
+    {
+      "status": "M",
+      "path": "src/lib/db/schema.ts",
+      "sha256": "8da62ec152f2a71b4b773d125098ebc2779ad66875cd9820b947fab5f7acd8ba"
+    },
+    {
+      "status": "M",
+      "path": "src/lib/nav.ts",
+      "sha256": "4c5fdb8a59fea843cbee37eefbb08acf5bbe371c98e5af531f61df603d54bf9c"
+    },
+    {
+      "status": "A",
+      "path": "src/server/comercial/catalogo-v3.json",
+      "sha256": "2dfb321b4ebf7d5908298b1f735421eb418e0fd65b30d9b161eadd78c54e5397"
+    },
+    {
+      "status": "A",
+      "path": "src/server/comercial/contracts.ts",
+      "sha256": "df4007672e3958b6bbdf8ea60920dd20ea4745b486f4de3972e3a5aca6d011a8"
+    },
+    {
+      "status": "A",
+      "path": "src/server/comercial/http.ts",
+      "sha256": "c9f17c4ee987dbe22e30b9e8dc2c4975b89c86b0fba8c2dca72ec48ae07dd8d3"
+    },
+    {
+      "status": "A",
+      "path": "src/server/comercial/service.ts",
+      "sha256": "785a96e36b7b913f2ace4bef011a711ac2b9ae874d4dc37554794915f433374f"
+    },
+    {
+      "status": "A",
+      "path": "tests/unit/comercial-postgres.integration.test.ts",
+      "sha256": "2c38886c635bf599295365e52de3aa81fa5ce331d976848f3d7a69196532bb08"
+    },
+    {
+      "status": "M",
+      "path": "tests/unit/nav.test.ts",
+      "sha256": "bd29717d1b3557a6d0526c81f9e9331e9d771adf5a22d44513f1251d8a087bde"
+    },
+    {
+      "status": "A",
+      "path": "docs/modonext/COMERCIAL_V1_MANIFEST.json",
+      "note": "Manifiesto documental agregado después del commit funcional; sin cambios de código."
+    }
+  ],
+  "productionMigrationPrefix": [
+    {
+      "tag": "0000_absurd_the_santerians",
+      "when": 1783657511753,
+      "sha256": "0bbd34443d21d67b5c1f9d43d8e08ce53c78fab01c7f12e474fb0dcbf42fccd7"
+    },
+    {
+      "tag": "0001_old_sabra",
+      "when": 1785464517783,
+      "sha256": "8c81e19746786598fbd9726a2d8828f1f249cac3e888a71f0e81b2465a3ea512"
+    },
+    {
+      "tag": "0002_closed_millenium_guard",
+      "when": 1785872764254,
+      "sha256": "20c9b8313aba79122d20815960860126f802e94cf856c2e3448f4e1e10d5430e"
+    },
+    {
+      "tag": "0003_flippant_mastermind",
+      "when": 1786835958011,
+      "sha256": "e530c6b42fd307186b73ae5ad1d182bb9f5c4a35e042cc787e4b8262f5f4d462"
+    },
+    {
+      "tag": "0004_reflective_the_enforcers",
+      "when": 1786849014992,
+      "sha256": "69e426f5181e8aae9b33196f903dd90c8d365e95f57cee1374299091af11c58b"
+    },
+    {
+      "tag": "0005_glossy_excalibur",
+      "when": 1786850050625,
+      "sha256": "4af8d15c4c603a124254dfcd05bd1fafb9342db818727345a4895287f7e18aa4"
+    },
+    {
+      "tag": "0006_keen_thor_girl",
+      "when": 1786855153169,
+      "sha256": "ee758f05221f9eba618e1cfbebc9db1b30ce8af497d68e2733f02a37f856556b"
+    },
+    {
+      "tag": "0007_confused_zaran",
+      "when": 1786856261073,
+      "sha256": "103eb71e6c2175a93c0f68d487517ea19fc36dc08d878e1f905531afe39a0547"
+    },
+    {
+      "tag": "0008_canal_instagram",
+      "when": 1787000000000,
+      "sha256": "317302d2ba98803ae46c760aeca3aee9b1c3a0ceb1fc0b7b2ea9ab397ce4c24b"
+    },
+    {
+      "tag": "0009_motor_agenda",
+      "when": 1787796724315,
+      "sha256": "f3b6e4590597da07c6448e77e892d1811aa3f1d3664e378d9422d27c2153b93c"
+    },
+    {
+      "tag": "0010_atribucion_capi",
+      "when": 1787960052077,
+      "sha256": "49c3f5d241903c05e7be5bd25a42f9d9180492f6e79ccd9a6152b0a5c76d40a8"
+    },
+    {
+      "tag": "0011_canal_messenger",
+      "when": 1788309200954,
+      "sha256": "e80efbfee33b2b79c0c2ac73b19fea3e44e36d1ad93a8216a5e828a8a0416461"
+    },
+    {
+      "tag": "0012_messenger_zernio",
+      "when": 1788310823966,
+      "sha256": "121613346c5974a849e71d833db4ddd92898c5266dfdd6f9bf95a8b3d4e7d8b8"
+    },
+    {
+      "tag": "0013_nombre_del_contacto",
+      "when": 1788731118597,
+      "sha256": "6635d21fabb81b199e42600b11a971ebfcdd596d6c5a2b9195b88166668adc78"
+    },
+    {
+      "tag": "0014_anuncio_de_origen",
+      "when": 1790048470717,
+      "sha256": "5fc63bdcf71abd7da86c8123357d3c4b35e18db07d0e5f11b760d5fd24fbaeb9"
+    },
+    {
+      "tag": "0015_token_de_ia",
+      "when": 1791426906573,
+      "sha256": "45e94581735c070f13f934d768aa2cf918aee2081549428a21a65aa1313e20ec"
+    },
+    {
+      "tag": "0016_despacho_al_cerebro",
+      "when": 1791469451742,
+      "sha256": "f97100d4ab45372782664a7e72830525c0fd0ec33cba93a9c913d70d8642c468"
+    },
+    {
+      "tag": "0017_dispatch_message_ids",
+      "when": 1791914626123,
+      "sha256": "e95dd492b5e6748b5b85ca08ecaab0db0e53142feab2d4b92222d7941a506c25"
+    },
+    {
+      "tag": "0018_canal_tiktok",
+      "when": 1791918147335,
+      "sha256": "48c615a9d460e21350aa65b6a2dcba1f2c0caeff5f019b841cabaff5848f171e"
+    },
+    {
+      "tag": "0019_contact_ai_paused",
+      "when": 1791947815503,
+      "sha256": "d7f63665ceb76ada2beac67db15db6a046b583f0071e1fd59dc7f68862699043"
+    },
+    {
+      "tag": "0020_secreto_zernio_cifrado",
+      "when": 1791987903930,
+      "sha256": "0db1044cdb40e83f528adbeebaef3d0bee7b2e80f11501b6ee4cd06010893bba"
+    },
+    {
+      "tag": "0021_roles_como_datos",
+      "when": 1792517498460,
+      "sha256": "802eae86bf7a607a750012f6004e23d070080eefa1ab87dffc3776921eab06fe"
+    },
+    {
+      "tag": "0022_responder_citando",
+      "when": 1792608627646,
+      "sha256": "8380afd149ce34f8740d0384665c4d91ad828a7e6c1d6f56e8566b4c8e123760"
+    },
+    {
+      "tag": "0023_webhook_event",
+      "when": 1792758207285,
+      "sha256": "d831ab8841a9f13b6f1e908f1f1ff97b19759829aa1fae02d117f28d8bcdc359"
+    },
+    {
+      "tag": "0024_quick_reply",
+      "when": 1792778191260,
+      "sha256": "05702f27b9addd2023f4ce29275589bbab6aaee9c028a66d5186dc3cfa05a86e"
+    },
+    {
+      "tag": "0025_conversation_note",
+      "when": 1792779395979,
+      "sha256": "e6b4f830538b9793a075405ea81deb890a1e0f39bc593bd620cb07304c15f270"
+    },
+    {
+      "tag": "0026_cuenta_de_mensajes",
+      "when": 1793222749562,
+      "sha256": "e26e527fc59e011e0ccfec9b02802f6fdf43093cf4791fe3955821b2a0c2d633"
+    },
+    {
+      "tag": "0027_chilly_venom",
+      "when": 1793520319612,
+      "sha256": "90c4d5c8fd392bed4bbe5bbcf6ac6e0386917ab883e2f126ef3c07717733ee0d"
+    },
+    {
+      "tag": "0028_narrow_blizzard",
+      "when": 1793521136183,
+      "sha256": "5125e4dc400c6926de6095086bf3ca5df83e77cbe821cdbf910d5744a2972366"
+    },
+    {
+      "tag": "0029_easy_bucky",
+      "when": 1793676357429,
+      "sha256": "16debff68f724f6bb33b34dc05095a06a09d20af4e564bd2e00f4328be877415"
+    },
+    {
+      "tag": "0030_lucky_eternals",
+      "when": 1793676915850,
+      "sha256": "452db87820898bc652bd8e08af3a2ee15a8d2b64f27ee64a907a25fe3be92525"
+    },
+    {
+      "tag": "0031_cold_smiling_tiger",
+      "when": 1793696573594,
+      "sha256": "b9ec3e2269722cf144382d1321d61fb795bce356b782b5b7665ed15986de1d95"
+    },
+    {
+      "tag": "0032_even_wind_dancer",
+      "when": 1793697131853,
+      "sha256": "3b6e90ce214b5bad84fcc155191b4069befcecdd8bf7220de496f3ea4cae8ec0"
+    },
+    {
+      "tag": "0033_giant_inertia",
+      "when": 1793697740576,
+      "sha256": "958a99b92c621e6b33855c199fbab1b64ebb54e23fd3a8895abf7f60be6e7f1b"
+    },
+    {
+      "tag": "0034_demo_center_foundations",
+      "when": 1793814805027,
+      "sha256": "a405f77d018ea75bd02f093ec65f3375d6291e5ae4ceb6e662ac91411fdd2888"
+    },
+    {
+      "tag": "0035_demo_center_knowledge",
+      "when": 1793815161009,
+      "sha256": "4ec910217adf5bb4c702b8e38f17c55b78ebc13c146acbfdbf9ed0ffb803d010"
+    },
+    {
+      "tag": "0036_demo_center_runtime_contracts",
+      "when": 1793815366868,
+      "sha256": "7484f3abca269094ea72ce5b719b2e3e58dfd3e21b186c4d4b9d9dbc7fa2ec65"
+    },
+    {
+      "tag": "0037_demo_center_budget_exceptions",
+      "when": 1793815455525,
+      "sha256": "a9f6160790b7790476547b68da2625e54fb67a3324054ec17eb14df2acc1a045"
+    },
+    {
+      "tag": "0038_demo_internal_simulator",
+      "when": 1793915575904,
+      "sha256": "3539247f90df1780d6d2497483d01dff04a18b041ab4528d035e4279b5c74a6e"
+    },
+    {
+      "tag": "0039_demo_llm_consumption",
+      "when": 1793918168985,
+      "sha256": "f452823165d31283150de462772fed5d59207879cfa380e2a3f94f8a4c3af598"
+    },
+    {
+      "tag": "0040_demo_web_invitations",
+      "when": 1794034512145,
+      "sha256": "a2527b590839bda4de15d30898f7b3dd32b1b1ea0a6c502183b619aa556b456c"
+    },
+    {
+      "tag": "0041_demo_whatsapp_link",
+      "when": 1794036323218,
+      "sha256": "9d1127cf7a34f27e67c3477c561c7b517b09aee564d19eb1c37d7a68c97dddc3"
+    },
+    {
+      "tag": "0042_confused_mandrill",
+      "when": 1794226554259,
+      "sha256": "35833a3eb507474d5e8efa5283502fd5808fde3c4876d5e7479f869b55b8af98"
+    },
+    {
+      "tag": "0043_striped_vanisher",
+      "when": 1794260802251,
+      "sha256": "0d2a1fc09c6e699182769b6faa90c6b8b2218fa75b35c48cff9692bb8cb33639"
+    }
+  ],
+  "newMigration": {
+    "tag": "0044_comercial_v1",
+    "sha256": "ae38579f6c428b98e9f322e616feb43013ea52cfad6d573223ccd0042639938a"
+  },
+  "dependenciesChanged": false,
+  "tests": {
+    "postgresIntegration": 9,
+    "navigation": 10,
+    "pythonAdapterSimulated": 3,
+    "typecheck": "PASS",
+    "lint": "PASS focalizado + build",
+    "build": "PASS Next.js 15.5.28 Windows Node24.13.1",
+    "browser": "PASS Chrome real, Better Auth real, 1440/390, respuesta perdida sin duplicar",
+    "migration": "PASS prefix 44 → 45; aplicación doble, migrador anterior y fila conservada"
+  },
+  "pendingProduction": [
+    "Autorización posterior de publicación y despliegue",
+    "Build Linux de imagen y digest verificado",
+    "Cotejo SQL directo del journal real",
+    "Respaldo actual restaurable antes de migrar",
+    "Habilitación por banderas y registro preparado de Nea, con prueba supervisada"
+  ]
+}

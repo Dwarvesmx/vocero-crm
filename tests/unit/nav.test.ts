@@ -16,6 +16,13 @@ const labels = (groups: { items: { label: string }[] }[]) =>
   groups.map((g) => g.items.map((i) => i.label));
 
 describe("barra lateral agrupada", () => {
+  it("Comercial solo aparece con bandera y rol administrativo", () => {
+    const contiene = (role: string, comercial = false) => appNavGroups({role,comercial}).some(g=>g.items.some(i=>i.href==="/comercial"));
+    expect(contiene("owner")).toBe(false);
+    expect(contiene("member",true)).toBe(false);
+    expect(contiene("owner",true)).toBe(true);
+    expect(contiene("admin",true)).toBe(true);
+  });
   it("con todo apagado y como miembro: Trabajo, Agente y Resultados", () => {
     const groups = appNavGroups({ role: "member" });
     expect(groups.map((g) => g.title)).toEqual(["Trabajo", "Agente", undefined]);

@@ -1,5 +1,7 @@
 # ModoNext — índice maestro Vocero / Nea
 
+2026-11-16 · Comercial V1: entrega aislada sobre producción f66a589; catálogo, cotizaciones versionadas, aprobaciones, contrataciones y pago administrativo. Sin despliegue ni habilitación de Lukas. [Implementación, evidencia y publicación](COMERCIAL_V1.md).
+
 Registro técnico público sanitizado. Última actualización: 2026-11-03. Este índice distingue fuente probada, publicación y producción. La bitácora histórica completa continúa fuera de GitHub en el workspace del propietario (`docs/integraciones/ESTADO.md`); no se publican trazas de conversaciones, números, credenciales ni identificadores de infraestructura.
 
 ## Demo Center V1 — arquitectura ARQ-01

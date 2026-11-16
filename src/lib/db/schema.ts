@@ -15,6 +15,43 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
+// Comercial V1: aditivo; importes enteros en centavos MXN y snapshots inmutables.
+const comercialOrg = () => text("organization_id").notNull().references(() => organization.id, { onDelete: "restrict" });
+export const comercialCatalogo = pgTable("comercial_catalogo", {
+  id: text("id").notNull(), organizationId: comercialOrg(), data: jsonb("data").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => [unique().on(t.organizationId, t.id)]);
+export const comercialCotizacion = pgTable("comercial_cotizacion", {
+  id: text("id").primaryKey(), organizationId: comercialOrg(),
+  conversationId: text("conversation_id").notNull().references(() => conversation.id, { onDelete: "restrict" }),
+  contactId: text("contact_id").notNull().references(() => contact.id, { onDelete: "restrict" }),
+  version: integer("version").notNull(), estado: text("estado").notNull(),
+  aprobadaVersion: integer("aprobada_version"), acceptedMessageId: text("accepted_message_id").references(() => message.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => [unique().on(t.organizationId,t.id), index("comercial_cotizacion_org_idx").on(t.organizationId,t.conversationId),
+  check("comercial_cotizacion_estado_ck",sql`${t.estado} in ('pendiente','aprobada','rechazada','aceptada')`)]);
+export const comercialVersion = pgTable("comercial_version", {
+  id: text("id").primaryKey(), organizationId: comercialOrg(), cotizacionId: text("cotizacion_id").notNull(),
+  version: integer("version").notNull(), snapshot: jsonb("snapshot").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => [unique().on(t.organizationId,t.cotizacionId,t.version), foreignKey({columns:[t.organizationId,t.cotizacionId],foreignColumns:[comercialCotizacion.organizationId,comercialCotizacion.id]}).onDelete("restrict")]);
+export const comercialPedido = pgTable("comercial_pedido", {
+  id: text("id").primaryKey(), organizationId: comercialOrg(), cotizacionId: text("cotizacion_id").notNull(),
+  version: integer("version").notNull(), estado: text("estado").notNull().default("pendiente"),
+  enlace: text("enlace"), evidencia: text("evidencia"), createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => [unique().on(t.organizationId,t.cotizacionId), foreignKey({columns:[t.organizationId,t.cotizacionId],foreignColumns:[comercialCotizacion.organizationId,comercialCotizacion.id]}).onDelete("restrict"),
+  check("comercial_pago_estado_ck",sql`${t.estado} in ('pendiente','en_verificacion','pagado','cancelado')`),
+  check("comercial_pago_evidencia_ck",sql`${t.estado} <> 'pagado' or (${t.evidencia} is not null and length(trim(${t.evidencia})) > 0)`)]);
+export const comercialEvento = pgTable("comercial_evento", {
+  id: text("id").primaryKey(), organizationId: comercialOrg(), cotizacionId: text("cotizacion_id"),
+  actor: text("actor").notNull(), action: text("action").notNull(), data: jsonb("data").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, t => [index("comercial_evento_org_idx").on(t.organizationId,t.cotizacionId)]);
+export const comercialReintento = pgTable("comercial_reintento", {
+  organizationId: comercialOrg(), actor: text("actor").notNull(), key: text("key").notNull(),
+  hash: text("hash").notNull(), result: jsonb("result").notNull(),
+}, t => [unique().on(t.organizationId,t.actor,t.key)]);
+
 /**
  * Tiempo: todas las columnas son `timestamp without time zone` y el marco es
  * UTC. Drizzle lo respeta en ambas direcciones; `now()` de los `defaultNow()`

@@ -1,0 +1,1110 @@
+[
+  {
+    "id": "tarjeta",
+    "nombre": "Tarjeta digital",
+    "descripcion": "Un perfil profesional o de negocio para compartir datos: nombre, foto o logotipo aportado, breve descripción, teléfono, WhatsApp, correo cuando corresponda, **hasta dos enlaces sociales** y opción para guardar contacto. Adaptable al celular; se propone enlace en subdominio ModoNext y alojamiento básico, sujetos a aprobación de costos y periodo antes de contratar. **Estado:** la segunda red social está decidida comercialmente, pero todavía requiere ajuste técnico antes de prometer entrega inmediata. No incluye nuevo logotipo, panel administrativo ni dominio propio. Se puede ampliar con dominio, QR, idiomas y perfiles adicionales, previa cotización.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Un perfil profesional o de negocio para compartir datos: nombre, foto o logotipo aportado, breve descripción, teléfono, WhatsApp, correo cuando corresponda, **hasta dos enlaces sociales** y opción para guardar contacto. Adaptable al celular; se propone enlace en subdominio ModoNext y alojamiento básico, sujetos a aprobación de costos y periodo antes de contratar. **Estado:** la segunda red social está decidida comercialmente, pero todavía requiere ajuste técnico antes de prometer entrega inmediata. No incluye nuevo logotipo, panel administrativo ni dominio propio. Se puede ampliar con dominio, QR, idiomas y perfiles adicionales, previa cotización."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 79000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "perfiles": 1,
+      "redes_sociales": 2
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. "
+  },
+  {
+    "id": "menu",
+    "nombre": "Menú digital",
+    "descripcion": "Menú compartible, **hasta 20 platillos en cuatro categorías**, descripciones, precios y fotos aportadas, navegación cómoda desde celular y consulta por WhatsApp. Subdominio y alojamiento básico inicial: inclusión propuesta, pendiente de aprobación de costos y periodo; confirmar antes de contratar. **No es tienda en línea**: no confirma pedidos automáticamente ni cobra dentro del menú. Se pueden agregar productos, categorías, imágenes, QR y, como ampliación diferente, un proceso de pedidos o cobros.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Menú compartible, **hasta 20 platillos en cuatro categorías**, descripciones, precios y fotos aportadas, navegación cómoda desde celular y consulta por WhatsApp. Subdominio y alojamiento básico inicial: inclusión propuesta, pendiente de aprobación de costos y periodo; confirmar antes de contratar. **No es tienda en línea**: no confirma pedidos automáticamente ni cobra dentro del menú. Se pueden agregar productos, categorías, imágenes, QR y, como ampliación diferente, un proceso de pedidos o cobros."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 129000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "productos": 20,
+      "categorias": 4
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. "
+  },
+  {
+    "id": "web",
+    "nombre": "Página web",
+    "descripcion": "Una sola página informativa, con **hasta cinco secciones** de presentación, productos/servicios, historia, datos/horarios y sección complementaria; contacto por WhatsApp, diseño adaptable a celular y computadora. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo por un periodo inicial propuesto de **12 meses**, con renovación informada por separado. **Estado:** la quinta sección requiere ajuste técnico menor antes de ofrecer disponibilidad inmediata. No incluye tienda, múltiples páginas, posicionamiento garantizado ni mantenimiento ilimitado. Las secciones fuera del paquete y las funcionalidades nuevas se cotizan aparte.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Una sola página informativa, con **hasta cinco secciones** de presentación, productos/servicios, historia, datos/horarios y sección complementaria; contacto por WhatsApp, diseño adaptable a celular y computadora. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo por un periodo inicial propuesto de **12 meses**, con renovación informada por separado. **Estado:** la quinta sección requiere ajuste técnico menor antes de ofrecer disponibilidad inmediata. No incluye tienda, múltiples páginas, posicionamiento garantizado ni mantenimiento ilimitado. Las secciones fuera del paquete y las funcionalidades nuevas se cotizan aparte."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 149900,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "paginas": 1,
+      "secciones": 5
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+  },
+  {
+    "id": "catalogo",
+    "nombre": "Catálogo de productos",
+    "descripcion": "Presentación de **hasta 15 productos** con foto principal, descripción, precio, categorías, búsqueda y consulta por WhatsApp. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. No contiene carrito ni pagos, ni administra existencias automáticamente. Se pueden agregar bloques de productos o categorías y, cuando se necesita venta completa, proponer tienda en línea como servicio distinto.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Presentación de **hasta 15 productos** con foto principal, descripción, precio, categorías, búsqueda y consulta por WhatsApp. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. No contiene carrito ni pagos, ni administra existencias automáticamente. Se pueden agregar bloques de productos o categorías y, cuando se necesita venta completa, proponer tienda en línea como servicio distinto."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 249000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "productos": 15
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+  },
+  {
+    "id": "citas",
+    "nombre": "Servicios y solicitudes de citas",
+    "descripcion": "Presentación de **hasta seis servicios**, horarios informativos, descripción, precio o duración aportados por el negocio y solicitud de cita por WhatsApp. El establecimiento **confirma manualmente** la cita. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. Para permitir que el cliente vea horarios libres y reserve directamente, se ofrece una **ampliación de reservas en línea** sujeta a configuración y tarifa.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Presentación de **hasta seis servicios**, horarios informativos, descripción, precio o duración aportados por el negocio y solicitud de cita por WhatsApp. El establecimiento **confirma manualmente** la cita. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. Para permitir que el cliente vea horarios libres y reserve directamente, se ofrece una **ampliación de reservas en línea** sujeta a configuración y tarifa."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 249000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "servicios": 6
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+  },
+  {
+    "id": "crm",
+    "nombre": "Vocero CRM",
+    "descripcion": "Solución para organizar clientes, prospectos y oportunidades comerciales, dar seguimiento a interesados y trabajar con un embudo de ventas. La configuración, cantidad de usuarios, almacenamiento, soporte y disponibilidad se especifican al cotizar. No incluye automáticamente agente de WhatsApp ni integraciones nuevas. **Los precios y la disponibilidad para nuevos clientes están condicionados a validación técnica y operativa; no emitir un contrato cerrado sin autorización.**",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Solución para organizar clientes, prospectos y oportunidades comerciales, dar seguimiento a interesados y trabajar con un embudo de ventas. La configuración, cantidad de usuarios, almacenamiento, soporte y disponibilidad se especifican al cotizar. No incluye automáticamente agente de WhatsApp ni integraciones nuevas. **Los precios y la disponibilidad para nuevos clientes están condicionados a validación técnica y operativa; no emitir un contrato cerrado sin autorización.**"
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 249000,
+    "mensual": 99900,
+    "precioEstado": "orientativo",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. "
+  },
+  {
+    "id": "agente",
+    "nombre": "Asistente inteligente para WhatsApp",
+    "descripcion": "Atiende consultas acerca del negocio, explica productos y servicios, orienta según información autorizada, identifica interesados y puede solicitar intervención humana cuando corresponda. El plan incluye **un nivel de consumo mensual y soporte definidos para cada propuesta**: no es ilimitado. No afirmar cupos concretos, automatizaciones de seguimiento, agendas conectadas ni inventario en tiempo real sin confirmación. **Precios, cupos y activación siguen sujetos a medición y autorización.**",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Atiende consultas acerca del negocio, explica productos y servicios, orienta según información autorizada, identifica interesados y puede solicitar intervención humana cuando corresponda. El plan incluye **un nivel de consumo mensual y soporte definidos para cada propuesta**: no es ilimitado. No afirmar cupos concretos, automatizaciones de seguimiento, agendas conectadas ni inventario en tiempo real sin confirmación. **Precios, cupos y activación siguen sujetos a medición y autorización.**"
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 449000,
+    "mensual": 199000,
+    "precioEstado": "orientativo",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. "
+  },
+  {
+    "id": "combinado",
+    "nombre": "Vocero CRM + asistente WhatsApp",
+    "descripcion": "Integra organización y seguimiento comercial con atención inteligente; los servicios básicos de ambos se incluyen según contrato, aprovechando la implantación conjunta. Puede ofrecer mejor valor que contratarlos separadamente; **no declarar registro automático o sincronización completa hasta que la integración específica esté probada**, ni emitir cotización cerrada sin límites de uso, soporte y usuarios acordados. **Los importes están propuestos, no autorizados aún para contratación automática.**",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Integra organización y seguimiento comercial con atención inteligente; los servicios básicos de ambos se incluyen según contrato, aprovechando la implantación conjunta. Puede ofrecer mejor valor que contratarlos separadamente; **no declarar registro automático o sincronización completa hasta que la integración específica esté probada**, ni emitir cotización cerrada sin límites de uso, soporte y usuarios acordados. **Los importes están propuestos, no autorizados aún para contratación automática.**"
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 599000,
+    "mensual": 259000,
+    "precioEstado": "orientativo",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. "
+  },
+  {
+    "id": "inmobiliaria",
+    "nombre": "Inmobiliaria de Mérida",
+    "descripcion": "Hasta seis propiedades estáticas. Inventario en vivo, mapas avanzados y CRM son ampliaciones.",
+    "tipo": "especializacion",
+    "caracteristicas": [
+      "Hasta seis propiedades estáticas. Inventario en vivo, mapas avanzados y CRM son ampliaciones."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 249000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "propiedades": 6
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+  },
+  {
+    "id": "consultorio",
+    "nombre": "Consultorio",
+    "descripcion": "Un profesional, hasta seis servicios, credenciales aportadas y verificadas. Sin historias clínicas ni reserva automática.",
+    "tipo": "especializacion",
+    "caracteristicas": [
+      "Un profesional, hasta seis servicios, credenciales aportadas y verificadas. Sin historias clínicas ni reserva automática."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 249000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "profesionales": 1,
+      "servicios": 6
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+  },
+  {
+    "id": "spa",
+    "nombre": "Spa y estética",
+    "descripcion": "Presentación sectorial de servicios y solicitudes manuales de citas. Reservas con disponibilidad se cotizan aparte.",
+    "tipo": "especializacion",
+    "caracteristicas": [
+      "Presentación sectorial de servicios y solicitudes manuales de citas. Reservas con disponibilidad se cotizan aparte."
+    ],
+    "exclusiones": [
+      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+    ],
+    "unico": 249000,
+    "mensual": 0,
+    "precioEstado": "orientativo",
+    "limites": {
+      "servicios": 6
+    },
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+  },
+  {
+    "id": "extra-01",
+    "nombre": "Sección web adicional (a partir de sexta)",
+    "descripcion": "Contenido listo, bloque existente; quinta sección ya es parte del paquete",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Contenido listo, bloque existente; quinta sección ya es parte del paquete"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 29000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web"
+    ],
+    "activo": true,
+    "condiciones": "Contenido listo, bloque existente; quinta sección ya es parte del paquete Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 290–590."
+  },
+  {
+    "id": "extra-02",
+    "nombre": "Página independiente adicional",
+    "descripcion": "No confundir con sección dentro de one-page",
+    "tipo": "extra",
+    "caracteristicas": [
+      "No confundir con sección dentro de one-page"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web"
+    ],
+    "activo": true,
+    "condiciones": "No confundir con sección dentro de one-page Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-03",
+    "nombre": "Redacción breve de sección",
+    "descripcion": "Material base del cliente; no copywriting integral",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Material base del cliente; no copywriting integral"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 29000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web"
+    ],
+    "activo": true,
+    "condiciones": "Material base del cliente; no copywriting integral Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 290–590."
+  },
+  {
+    "id": "extra-04",
+    "nombre": "Preparación/optimización hasta 10 fotografías",
+    "descripcion": "Derechos del cliente; no generar imágenes nuevas sin consentimiento",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Derechos del cliente; no generar imágenes nuevas sin consentimiento"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 59000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Derechos del cliente; no generar imágenes nuevas sin consentimiento Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 590–890."
+  },
+  {
+    "id": "extra-05",
+    "nombre": "Diseño de logotipo o identidad visual",
+    "descripcion": "Servicio con diseñadora; presupuesto separado",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Servicio con diseñadora; presupuesto separado"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Servicio con diseñadora; presupuesto separado Estado V3: PROVEEDOR_EXTERNO. Requiere aprobación."
+  },
+  {
+    "id": "extra-06",
+    "nombre": "Segundo idioma",
+    "descripcion": "Traducción y actualización por cuenta",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Traducción y actualización por cuenta"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Traducción y actualización por cuenta Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-07",
+    "nombre": "Hasta 10 productos adicionales",
+    "descripcion": "Texto, precios y foto principal listos; contar solo excedente",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Texto, precios y foto principal listos; contar solo excedente"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 29000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "menu",
+      "catalogo"
+    ],
+    "activo": true,
+    "condiciones": "Texto, precios y foto principal listos; contar solo excedente Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 290–590."
+  },
+  {
+    "id": "extra-08",
+    "nombre": "Hasta 20 productos adicionales",
+    "descripcion": "Carga preparada; no incluye fotografía ni inventario",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Carga preparada; no incluye fotografía ni inventario"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 59000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "menu",
+      "catalogo"
+    ],
+    "activo": true,
+    "condiciones": "Carga preparada; no incluye fotografía ni inventario Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 590–890."
+  },
+  {
+    "id": "extra-09",
+    "nombre": "Categoría adicional",
+    "descripcion": "Si el modelo acepta categorías extra sin programar",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Si el modelo acepta categorías extra sin programar"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 19000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "menu",
+      "catalogo"
+    ],
+    "activo": true,
+    "condiciones": "Si el modelo acepta categorías extra sin programar Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 190–290."
+  },
+  {
+    "id": "extra-10",
+    "nombre": "Tercer enlace social o posterior",
+    "descripcion": "Dos redes incluidas; segundo enlace aún requiere implementación",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Dos redes incluidas; segundo enlace aún requiere implementación"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta"
+    ],
+    "activo": true,
+    "condiciones": "Dos redes incluidas; segundo enlace aún requiere implementación Estado V3: POR_VALIDAR_TECNICAMENTE. Requiere aprobación."
+  },
+  {
+    "id": "extra-11",
+    "nombre": "Dominio propio sencillo + hosting básico tarjeta/menú",
+    "descripcion": "Precio por año; subdominio incluido; verificar TLD, titularidad y renovación",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Precio por año; subdominio incluido; verificar TLD, titularidad y renovación"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 60000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu"
+    ],
+    "activo": true,
+    "condiciones": "Precio por año; subdominio incluido; verificar TLD, titularidad y renovación Estado V3: COSTO_POR_VALIDAR. Requiere aprobación. Referencia MXN: 600."
+  },
+  {
+    "id": "extra-12",
+    "nombre": "Dominio + hosting web/catálogo/citas primer periodo",
+    "descripcion": "Incluidos 12 meses propuestos, sujeto a verificación costo real; no doble cobro",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Incluidos 12 meses propuestos, sujeto a verificación costo real; no doble cobro"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 0,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web",
+      "catalogo",
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Incluidos 12 meses propuestos, sujeto a verificación costo real; no doble cobro Estado V3: INCLUIDO. Requiere aprobación. Referencia MXN: 0."
+  },
+  {
+    "id": "extra-13",
+    "nombre": "Renovación anual dominio y hosting",
+    "descripcion": "Informar antes del vencimiento; no se presupone igual en todos los casos",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Informar antes del vencimiento; no se presupone igual en todos los casos"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Informar antes del vencimiento; no se presupone igual en todos los casos Estado V3: POR_VALIDAR_COSTOS. Requiere aprobación."
+  },
+  {
+    "id": "extra-14",
+    "nombre": "QR de URL publicada",
+    "descripcion": "URL definitiva comprobada; no incluye impresión física",
+    "tipo": "extra",
+    "caracteristicas": [
+      "URL definitiva comprobada; no incluye impresión física"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 19000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "menu",
+      "tarjeta"
+    ],
+    "activo": true,
+    "condiciones": "URL definitiva comprobada; no incluye impresión física Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 190–290."
+  },
+  {
+    "id": "extra-15",
+    "nombre": "Formulario básico de contacto",
+    "descripcion": "Configuración estándar; evita backend propio; privacidad",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Configuración estándar; evita backend propio; privacidad"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 39000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web",
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Configuración estándar; evita backend propio; privacidad Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 390–590."
+  },
+  {
+    "id": "extra-16",
+    "nombre": "Formulario con registro y notificaciones",
+    "descripcion": "Plataforma adecuada; control de acceso y privacidad",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Plataforma adecuada; control de acceso y privacidad"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 59000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web",
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Plataforma adecuada; control de acceso y privacidad Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 590–990."
+  },
+  {
+    "id": "extra-17",
+    "nombre": "Formulario con reportes básicos",
+    "descripcion": "Hoja/resumen simple, no BI ni sistema de administración",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Hoja/resumen simple, no BI ni sistema de administración"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 79000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "web",
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Hoja/resumen simple, no BI ni sistema de administración Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 790–1490."
+  },
+  {
+    "id": "extra-18",
+    "nombre": "Formulario con lógica/datos sensibles",
+    "descripcion": "Seguridad, consentimiento y gestión conforme al dato",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Seguridad, consentimiento y gestión conforme al dato"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Seguridad, consentimiento y gestión conforme al dato Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-19",
+    "nombre": "Enlace o botón de pago",
+    "descripcion": "Cuenta de cliente verificada; no confirma pedido automáticamente",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Cuenta de cliente verificada; no confirma pedido automáticamente"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 39000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Cuenta de cliente verificada; no confirma pedido automáticamente Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 390–690."
+  },
+  {
+    "id": "extra-20",
+    "nombre": "Plugin/checkout en tienda compatible",
+    "descripcion": "Tienda ya funcional y plugin vigente; requiere pruebas y comisiones",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Tienda ya funcional y plugin vigente; requiere pruebas y comisiones"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 59000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tienda"
+    ],
+    "activo": true,
+    "condiciones": "Tienda ya funcional y plugin vigente; requiere pruebas y comisiones Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 590–1290."
+  },
+  {
+    "id": "extra-21",
+    "nombre": "Facturación o conciliación automática",
+    "descripcion": "Proveedor, fiscalidad, API, seguridad, licencias",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Proveedor, fiscalidad, API, seguridad, licencias"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tienda"
+    ],
+    "activo": true,
+    "condiciones": "Proveedor, fiscalidad, API, seguridad, licencias Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-22",
+    "nombre": "Tienda WooCommerce básica estandarizada",
+    "descripcion": "Máximo de catálogo a definir; diseño reutilizable; hosting y mantenimiento aparte",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Máximo de catálogo a definir; diseño reutilizable; hosting y mantenimiento aparte"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 299000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tienda"
+    ],
+    "activo": true,
+    "condiciones": "Máximo de catálogo a definir; diseño reutilizable; hosting y mantenimiento aparte Estado V3: PRECIO_OBJETIVO_PROPUESTO. Requiere aprobación. Referencia MXN: 2990."
+  },
+  {
+    "id": "extra-23",
+    "nombre": "Tienda PrestaShop",
+    "descripcion": "Según módulos, producto/variantes y alojamiento; experiencia previa del equipo",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Según módulos, producto/variantes y alojamiento; experiencia previa del equipo"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tienda"
+    ],
+    "activo": true,
+    "condiciones": "Según módulos, producto/variantes y alojamiento; experiencia previa del equipo Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-24",
+    "nombre": "Carrito/gestión pedido avanzado",
+    "descripcion": "No confundir con enlace externo ni catálogo estático",
+    "tipo": "extra",
+    "caracteristicas": [
+      "No confundir con enlace externo ni catálogo estático"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tienda"
+    ],
+    "activo": true,
+    "condiciones": "No confundir con enlace externo ni catálogo estático Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-25",
+    "nombre": "Reservas con disponibilidad un profesional",
+    "descripcion": "Plataforma compatible; cliente debe tener cuenta; suscripciones aparte",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Plataforma compatible; cliente debe tener cuenta; suscripciones aparte"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 49000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Plataforma compatible; cliente debe tener cuenta; suscripciones aparte Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 490–990."
+  },
+  {
+    "id": "extra-26",
+    "nombre": "Reserva multi-profesional con plataforma existente",
+    "descripcion": "Plataforma que soporte recursos; cupos/plan aparte",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Plataforma que soporte recursos; cupos/plan aparte"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 99000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Plataforma que soporte recursos; cupos/plan aparte Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 990–2490."
+  },
+  {
+    "id": "extra-27",
+    "nombre": "Recordatorios mediante servicio contratado",
+    "descripcion": "Depende del proveedor, plan, canal y mensajes",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Depende del proveedor, plan, canal y mensajes"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "Depende del proveedor, plan, canal y mensajes Estado V3: POR_VALIDAR_COSTOS. Requiere aprobación."
+  },
+  {
+    "id": "extra-28",
+    "nombre": "Agenda con reglas/operación personalizada",
+    "descripcion": "No construir hasta justificar necesidad",
+    "tipo": "extra",
+    "caracteristicas": [
+      "No construir hasta justificar necesidad"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "citas"
+    ],
+    "activo": true,
+    "condiciones": "No construir hasta justificar necesidad Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-29",
+    "nombre": "Automatización sencilla con servicio disponible",
+    "descripcion": "Una tarea definida, pruebas y límite de operaciones; suscripción aparte",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Una tarea definida, pruebas y límite de operaciones; suscripción aparte"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 99000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "tarjeta",
+      "menu",
+      "web",
+      "catalogo",
+      "citas",
+      "crm",
+      "agente",
+      "combinado",
+      "inmobiliaria",
+      "consultorio",
+      "spa"
+    ],
+    "activo": true,
+    "condiciones": "Una tarea definida, pruebas y límite de operaciones; suscripción aparte Estado V3: PRECIO_OBJETIVO_PROPUESTO. Requiere aprobación. Referencia MXN: 990."
+  },
+  {
+    "id": "extra-30",
+    "nombre": "Propiedades adicionales",
+    "descripcion": "Seis fichas estáticas contempladas en variante inicial; precio según carga",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Seis fichas estáticas contempladas en variante inicial; precio según carga"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "inmobiliaria"
+    ],
+    "activo": true,
+    "condiciones": "Seis fichas estáticas contempladas en variante inicial; precio según carga Estado V3: POR_APROBAR. Requiere aprobación."
+  },
+  {
+    "id": "extra-31",
+    "nombre": "Inventario con panel y sincronización",
+    "descripcion": "Requiere reglas de actualización, permisos y soporte",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Requiere reglas de actualización, permisos y soporte"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "inmobiliaria"
+    ],
+    "activo": true,
+    "condiciones": "Requiere reglas de actualización, permisos y soporte Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-32",
+    "nombre": "Mapas avanzados y filtros dinámicos",
+    "descripcion": "API geográfica, datos, geocodificación y mantenimiento",
+    "tipo": "extra",
+    "caracteristicas": [
+      "API geográfica, datos, geocodificación y mantenimiento"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "inmobiliaria"
+    ],
+    "activo": true,
+    "condiciones": "API geográfica, datos, geocodificación y mantenimiento Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-33",
+    "nombre": "Reservas conectadas para profesional",
+    "descripcion": "Sin expedientes ni datos clínicos sensibles",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Sin expedientes ni datos clínicos sensibles"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 49000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "citas",
+      "medico"
+    ],
+    "activo": true,
+    "condiciones": "Sin expedientes ni datos clínicos sensibles Estado V3: POR_APROBAR. Requiere aprobación. Referencia MXN: 490–990."
+  },
+  {
+    "id": "extra-34",
+    "nombre": "Expediente clínico o gestión de pacientes",
+    "descripcion": "Datos sensibles, privacidad y controles reforzados",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Datos sensibles, privacidad y controles reforzados"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "medico"
+    ],
+    "activo": true,
+    "condiciones": "Datos sensibles, privacidad y controles reforzados Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "extra-35",
+    "nombre": "Configuración CRM esencial",
+    "descripcion": "Setup base; no incluir agente ni canal WhatsApp",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Setup base; no incluir agente ni canal WhatsApp"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": 249000,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "crm"
+    ],
+    "activo": true,
+    "condiciones": "Setup base; no incluir agente ni canal WhatsApp Estado V3: PRECIO_OBJETIVO_PROPUESTO. Requiere aprobación. Referencia MXN: 2490."
+  },
+  {
+    "id": "extra-37",
+    "nombre": "Usuarios o pipelines adicionales",
+    "descripcion": "Según capacidades reales y consumo/soporte",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Según capacidades reales y consumo/soporte"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "crm"
+    ],
+    "activo": true,
+    "condiciones": "Según capacidades reales y consumo/soporte Estado V3: POR_VALIDAR_TECNICAMENTE. Requiere aprobación."
+  },
+  {
+    "id": "extra-40",
+    "nombre": "Bloques de consumo adicional",
+    "descripcion": "Definición transparente de unidad, umbrales, coste por bloque y consentimiento",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Definición transparente de unidad, umbrales, coste por bloque y consentimiento"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "agente"
+    ],
+    "activo": true,
+    "condiciones": "Definición transparente de unidad, umbrales, coste por bloque y consentimiento Estado V3: POR_VALIDAR_COSTOS. Requiere aprobación."
+  },
+  {
+    "id": "extra-41",
+    "nombre": "Más números o asistentes",
+    "descripcion": "Licencias/permisos/consumos y aislamiento separados",
+    "tipo": "extra",
+    "caracteristicas": [
+      "Licencias/permisos/consumos y aislamiento separados"
+    ],
+    "exclusiones": [
+      "No incluye funciones ni consumos no descritos."
+    ],
+    "unico": null,
+    "mensual": 0,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [
+      "agente"
+    ],
+    "activo": true,
+    "condiciones": "Licencias/permisos/consumos y aislamiento separados Estado V3: PERSONALIZADO. Requiere aprobación."
+  }
+]

@@ -1,9 +1,14 @@
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
+vi.mock('@/server/zernio/whatsapp-credenciales',()=>({obtenerZernioWhatsAppPorOrg:vi.fn(async()=>({token:'synthetic',accountRef:'cuenta-sintetica'}))}));
+vi.mock('@/server/zernio/whatsapp-envio',()=>({enviarTextoWhatsAppZernio:vi.fn(async()=> 'wamid-aviso-sintetico')}));
+import { barrerEnviosWhatsAppZernio } from '@/server/zernio/whatsapp-outbox';
+import { enviarTextoWhatsAppZernio } from '@/server/zernio/whatsapp-envio';
 import { randomUUID } from "node:crypto";
 import { getDb, getSql } from "@/lib/db";
 import { comercialEjecutar, comercialLeer } from "@/server/comercial/service";
 import { comandoSchema, type Actor, type Comando, type Producto, type Snapshot } from "@/server/comercial/contracts";
 import { GET as botGet, POST as botPost } from "@/app/api/bot/comercial/route";
+import { prepararAvisosComerciales, autorizarIntentoAviso } from "@/server/comercial/avisos";
 
 describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL descartable",()=>{
   const owner: Actor = {organizationId:"comercial-test",userId:"owner",role:"owner"};
@@ -111,5 +116,51 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect((await botPost(new Request(url,{method:"POST",headers,body:JSON.stringify({action:"catalogo",requestKey:"forbidden",producto})}))).status).toBe(403);
     process.env.COMERCIAL_BOT_ORG_ID="no-autorizada";expect((await botGet(new Request(url,{headers}))).status).toBe(403);process.env.COMERCIAL_BOT_ORG_ID=owner.organizationId;
     process.env.COMERCIAL_V1_ENABLED="false";expect((await botGet(new Request(url,{headers}))).status).toBe(404);process.env.COMERCIAL_V1_ENABLED="true";
+  });
+  it("Aviso durable: consentimiento, duplicados, ventana y continuidad hasta pedido pendiente",async()=>{
+    process.env.ZERNIO_WHATSAPP_ENABLED='true';
+    await sql`insert into zernio_whatsapp_credentials(id,organization_id,account_ref,token_cipher,token_iv,token_tag,secret_cipher,secret_iv,secret_tag,enabled)
+      values('cred-aviso',${owner.organizationId},'cuenta-sintetica','x','x','x','x','x','x',true)`;
+    await sql`update conversation set channel='whatsapp',channel_thread_ref='hilo-sintetico',last_inbound_at=clock_timestamp(),ai_enabled=true where id='conv'`;
+    const q=await preparar({conceptos:[{productoId:'estandar',cantidad:1}],especial:'Cafetería con materiales preparados'});
+    const ref={conversationId:'conv',cotizacionId:q.cotizacionId,version:1};
+    await expect(call(bot,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:'inexistente'})).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-aviso',${owner.organizationId},'conv','in','Sí, avísame cuando mi cotización esté autorizada')`;
+    await call(bot,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:'consent-aviso'});
+    const decision=comandoSchema.parse({action:'decidir',...ref,requestKey:'decision-aviso',decision:'aprobar',motivo:'Revisado'});
+    await comercialEjecutar(owner,decision); await comercialEjecutar(owner,decision);
+    await prepararAvisosComerciales(); await prepararAvisosComerciales();
+    const jobs=await sql`select * from zernio_whatsapp_outbox where request_key like ${'comercial-aviso:'+q.cotizacionId+':%'}`;
+    expect(jobs).toHaveLength(1);
+    expect(await autorizarIntentoAviso(jobs[0]!.id)).toBe(true);
+    await sql`update conversation set last_inbound_at=clock_timestamp()-interval '25 hours' where id='conv'`;
+    expect(await autorizarIntentoAviso(jobs[0]!.id)).toBe(false);
+    await sql`update conversation set last_inbound_at=clock_timestamp(),ai_enabled=false where id='conv'`;
+    expect(await autorizarIntentoAviso(jobs[0]!.id)).toBe(false);
+    await sql`update conversation set ai_enabled=true where id='conv'`;
+    await barrerEnviosWhatsAppZernio();
+    const [enviado]=await sql`select j.status,m.wa_message_id from zernio_whatsapp_outbox j join message m on m.id=j.message_id where j.id=${jobs[0]!.id}`;
+    expect(enviado).toMatchObject({status:'completado',wa_message_id:'wamid-aviso-sintetico'});
+    await barrerEnviosWhatsAppZernio();
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('accept-aviso',${owner.organizationId},'conv','in','Acepto esta propuesta')`;
+    await call(bot,{action:'aceptar',...ref,mensajeId:'accept-aviso'});
+    const pedido=await call(bot,{action:'contratar',...ref});
+    expect(pedido).toMatchObject({pedido:{estado:'pendiente',enlace:null}});
+    const sinConsentimiento=await sql`select count(*)::int as n from zernio_whatsapp_outbox j
+      join comercial_evento e on e.data->>'jobId'=j.id where e.data->>'motivo'='consentimiento_no_acreditado'`;
+    expect(sinConsentimiento[0]!.n).toBe(0);
+    const otra=await preparar({conceptos:[{productoId:'estandar',cantidad:1}],especial:'Aviso incierto'});
+    const r2={conversationId:'conv',cotizacionId:otra.cotizacionId,version:1};
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-2',${owner.organizationId},'conv','in','Sí, avísame cuando mi cotización esté autorizada')`;
+    await call(bot,{action:'solicitar_aprobacion',...r2,mensajeAvisoId:'consent-2'});
+    await call(owner,{action:'decidir',...r2,decision:'aprobar',motivo:'Revisado'});
+    vi.mocked(enviarTextoWhatsAppZernio).mockRejectedValueOnce(new Error('Timeout sintético'));
+    await barrerEnviosWhatsAppZernio();
+    const [incierto]=await sql`select status from zernio_whatsapp_outbox where request_key like ${'comercial-aviso:'+otra.cotizacionId+':%'}`;
+    expect(incierto!.status).toBe('incierto');
+    const llamadas=vi.mocked(enviarTextoWhatsAppZernio).mock.calls.length;
+    await barrerEnviosWhatsAppZernio();
+    expect(vi.mocked(enviarTextoWhatsAppZernio).mock.calls).toHaveLength(llamadas);
+    process.env.ZERNIO_WHATSAPP_ENABLED='false';
   });
 });

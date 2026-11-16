@@ -117,6 +117,13 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
           result = { cotizacionId: quoteId, version: cmd.version, estado: cmd.decision === "aprobar" ? "aprobada" : "rechazada" };
         } else if (cmd.action === "solicitar_aprobacion") {
           if (q.estado !== "pendiente") throw new ComercialError("estado_invalido");
+          if (cmd.mensajeAvisoId) {
+            const [m] = await sql`select text from message where organization_id=${actor.organizationId}
+              and conversation_id=${cmd.conversationId} and id=${cmd.mensajeAvisoId} and direction='in'
+              and scope_kind='commercial' and created_at>=${v!.created_at}`;
+            if (!m || !/^s[ií][,\s]+av[ií]same\s+(?:por (?:este )?whatsapp\s+)?cuando\s+(?:mi |la )?cotizaci[oó]n\s+est[eé]\s+(?:autorizada|aprobada)[.!]?$/iu.test(String(m.text).trim()))
+              throw new ComercialError("consentimiento_no_acreditado",422);
+          }
           result = { cotizacionId: quoteId, version: cmd.version, estado: "pendiente" };
         } else if (cmd.action === "aceptar") {
           if (q.estado !== "aprobada" || q.aprobada_version !== cmd.version) throw new ComercialError("falta_aprobacion");

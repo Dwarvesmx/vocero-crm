@@ -26,7 +26,7 @@ export const comandoSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("preparar"), requestKey: id, conversationId: id, propuesta: propuestaSchema }).strict(),
   z.object({ action: z.literal("revisar"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), propuesta: propuestaSchema }).strict(),
   z.object({ action: z.literal("decidir"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), decision: z.enum(["aprobar", "rechazar"]), motivo: texto }).strict(),
-  z.object({ action: z.literal("solicitar_aprobacion"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive() }).strict(),
+  z.object({ action: z.literal("solicitar_aprobacion"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), mensajeAvisoId: id.optional() }).strict(),
   z.object({ action: z.literal("aceptar"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), mensajeId: id }).strict(),
   z.object({ action: z.literal("contratar"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive() }).strict(),
   z.object({ action: z.literal("pago"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), estado: z.enum(["pendiente", "en_verificacion", "pagado", "cancelado"]), evidencia: texto.optional(), enlace: z.string().max(2048).optional() }).strict(),

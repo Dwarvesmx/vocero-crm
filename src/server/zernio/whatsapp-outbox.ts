@@ -1,4 +1,5 @@
 import { caducarDemosConversacionales } from "@/server/demo-center/infra/whatsapp-lifecycle";
+import { prepararAvisosComerciales, autorizarIntentoAviso } from "@/server/comercial/avisos";
 import { and, eq, lte, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
@@ -110,6 +111,11 @@ function propietario(job: Job) {
 export async function procesarEnvioZernioReservado(job: Job) {
   const db = getDb();
   try {
+    if (job.requestKey.startsWith('comercial-aviso:') && !(await autorizarIntentoAviso(job.id))) {
+      await db.update(schema.zernioWhatsappOutbox).set({status:'cancelado',leasedUntil:null,updatedAt:new Date()}).where(propietario(job));
+      await db.update(schema.message).set({status:'failed',error:'Aviso bloqueado: revisar consentimiento, ventana, canal y versión.'}).where(eq(schema.message.id,job.messageId));
+      return;
+    }
     if (job.attempts > MAX_INTENTOS) throw new MetaApiError("Límite de intentos agotado", { status: 400 });
     if (Date.now() - job.createdAt.getTime() >= MAX_EDAD_MS) throw new MetaApiError("Ventana de idempotencia agotada", { status: 400 });
     const cred = await obtenerZernioWhatsAppPorOrg(job.organizationId);
@@ -132,7 +138,8 @@ export async function procesarEnvioZernioReservado(job: Job) {
     const status = error instanceof MetaApiError ? error.status : 0;
     const { retry, demoraMs } = politicaEnvioZernio(status, job.attempts, Date.now() - job.createdAt.getTime());
     const marcado = await db.transaction(async (tx) => {
-      const [updated] = await tx.update(schema.zernioWhatsappOutbox).set({ status: retry ? "pendiente" : "fallido", leasedUntil: null,
+      const incierto=job.requestKey.startsWith('comercial-aviso:') && (status===0 || status===408 || status>=500);
+      const [updated] = await tx.update(schema.zernioWhatsappOutbox).set({ status: incierto ? 'incierto' : retry ? "pendiente" : "fallido", leasedUntil: null,
         notBefore: new Date(Date.now() + demoraMs), updatedAt: new Date() })
         .where(propietario(job)).returning({ id: schema.zernioWhatsappOutbox.id });
       if (updated && !retry) await tx.update(schema.message).set({ status: "failed", error: "No se pudo confirmar el envío; revisa antes de reenviar." })
@@ -146,7 +153,11 @@ export async function procesarEnvioZernioReservado(job: Job) {
 
 export async function barrerEnviosWhatsAppZernio() {
   if (process.env.ZERNIO_WHATSAPP_ENABLED !== "true") return;
-  const db = getDb(), now = new Date();
+  const db = getDb();
+  await prepararAvisosComerciales();
+  const now = new Date();
+  await db.execute(sql`update zernio_whatsapp_outbox set status='incierto',leased_until=null
+    where request_key like 'comercial-aviso:%' and status='procesando' and leased_until<=clock_timestamp()`);
   await recuperarSalidasInciertasZernio();
   await caducarDemosConversacionales().catch(() => {});
   if (process.env.ZERNIO_NEA_AUTO_ENABLED === "true" || process.env.DEMO_EXTERNAL_DELIVERY_ENABLED === "true") {

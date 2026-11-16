@@ -46,6 +46,9 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect(q.estado).toBe("pendiente");await call(bot,{action:"solicitar_aprobacion",...ref});
     await expect(call(bot,{action:"contratar",...ref})).rejects.toMatchObject({code:"falta_aceptacion"});
     await call(owner,{action:"decidir",...ref,decision:"aprobar",motivo:"Alcance revisado"});
+    const avisos = await sql`select data from comercial_evento where organization_id=${owner.organizationId} and cotizacion_id=${q.cotizacionId} and action='aviso_aprobacion'`;
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]!.data).toMatchObject({version:1,estado:"pendiente",motivo:"consentimiento_no_acreditado"});
     expect((await comercialLeer(bot,"conv",q.cotizacionId)).cotizaciones[0]!.estado).toBe("aprobada");
     const revised=await call(owner,{action:"revisar",...ref,propuesta:{conceptos:[{productoId:"estandar",cantidad:1}],importeUnico:140000}});
     expect(revised).toMatchObject({version:2,estado:"pendiente"});

@@ -106,6 +106,14 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
           if (cmd.decision === "aprobar" && (snapshot.unico === null || snapshot.mensual === null)) throw new ComercialError("importe_pendiente");
           await sql`update comercial_cotizacion set estado=${cmd.decision === "aprobar" ? "aprobada" : "rechazada"},aprobada_version=${cmd.decision === "aprobar" ? cmd.version : null}
             where organization_id=${actor.organizationId} and id=${quoteId}`;
+          if (cmd.decision === "aprobar") {
+            // Registrar la intención junto a la decisión, sin enviar mientras
+            // no exista evidencia verificable de autorización del destinatario.
+            const aviso = { version: cmd.version, conversationId: cmd.conversationId,
+              contactId: q.contact_id, estado: "pendiente", motivo: "consentimiento_no_acreditado" };
+            await sql`insert into comercial_evento(id,organization_id,cotizacion_id,actor,action,data)
+              values(${randomUUID()},${actor.organizationId},${quoteId},'sistema','aviso_aprobacion',${JSON.stringify(aviso)}::text::jsonb)`;
+          }
           result = { cotizacionId: quoteId, version: cmd.version, estado: cmd.decision === "aprobar" ? "aprobada" : "rechazada" };
         } else if (cmd.action === "solicitar_aprobacion") {
           if (q.estado !== "pendiente") throw new ComercialError("estado_invalido");

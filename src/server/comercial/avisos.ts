@@ -35,6 +35,7 @@ export async function prepararAvisosComerciales() {
       const text=`Tu cotización ${e.cotizacion_id}, versión ${e.data.version}, fue aprobada. `+
         snapshot.conceptos.map((l:{cantidad:number;producto:{nombre:string;caracteristicas:string[];exclusiones:string[];condiciones:string}})=>`${l.cantidad} × ${l.producto.nombre}: ${l.producto.caracteristicas.join('; ')}. Excluye: ${l.producto.exclusiones.join('; ')}. ${l.producto.condiciones}`).join('\n')+
         (snapshot.pendientes??[]).map((p:{descripcion:string;estado:string;condiciones?:string})=>`\n${p.descripcion}: ${p.estado}. ${p.condiciones??''}`).join('')+
+        (snapshot.promocion?`\nPrecio original conocido: ${money(snapshot.subtotalUnico)}. Promoción autorizada: ${snapshot.promocion.nombre}, descuento único ${money(snapshot.promocion.descuento)}. ${snapshot.promocion.condiciones??''} `:'')+
         `. Pago único: ${money(snapshot.unico)}; mensual: ${money(snapshot.mensual)}. ${snapshot.condiciones} `+
         "Lukas puede continuar contigo: ¿aceptas esta propuesta? La aprobación no confirma contratación ni pago.";
       if (text.length>4096) {

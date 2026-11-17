@@ -50,7 +50,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
   if (actor.userId) exigirAdmin(actor);
   else if (!["preparar","solicitar_aprobacion","aceptar","contratar"].includes(cmd.action) ||
     actor.role !== "bot" || (cmd.action === "preparar" &&
-      (cmd.propuesta.importeUnico !== undefined || cmd.propuesta.importeMensual !== undefined || cmd.propuesta.condiciones !== undefined ||
+      (cmd.propuesta.promocion !== undefined || cmd.propuesta.importeUnico !== undefined || cmd.propuesta.importeMensual !== undefined || cmd.propuesta.condiciones !== undefined ||
         cmd.propuesta.pendientes?.some(p=>p.estado!=='pendiente'||p.unico!==null||p.mensual!==null)))) {
     throw new ComercialError("sin_permiso",403);
   }

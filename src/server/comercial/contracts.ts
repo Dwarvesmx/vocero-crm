@@ -25,6 +25,7 @@ export const propuestaSchema = z.object({
     baseId: id.optional() }).strict()).min(1).max(40),
   condiciones: texto.optional(), especial: texto.optional(),
   pendientes:z.array(pendienteSchema).max(40).optional(),
+  promocion:z.object({nombre:texto,descuento:dinero,condiciones:texto.optional()}).strict().optional(),
   // Solo admin. Su presencia invalida la autorización automática.
   importeUnico: dinero.optional(), importeMensual: dinero.optional(),
 }).strict();
@@ -77,13 +78,21 @@ export function calcular(propuesta: Propuesta, catalogo: Producto[]) {
   const incompleta=pendientes.some(p=>p.estado==='pendiente');
   const subtotalUnico=conceptos.reduce((s,c)=>s+(c.producto.unico??0)*c.cantidad,0)+pendientes.reduce((s,p)=>s+(p.estado==='cotizado'?p.unico!:0),0);
   const subtotalMensual=conceptos.reduce((s,c)=>s+(c.producto.mensual??0)*c.cantidad,0)+pendientes.reduce((s,p)=>s+(p.estado==='cotizado'?p.mensual!:0),0);
-  const unico = incompleta ? null : propuesta.importeUnico ?? (sumar('unico')===null?null:subtotalUnico);
+  const descuento=propuesta.promocion?.descuento??0;
+  if(descuento>subtotalUnico)throw new ComercialError('descuento_excesivo',422);
+  const conocidoDespuesDescuento=subtotalUnico-descuento;
+  if(propuesta.promocion && propuesta.importeUnico!==undefined && propuesta.importeUnico!==conocidoDespuesDescuento)
+    throw new ComercialError('total_contradictorio',422);
+  const unico = incompleta ? null : propuesta.importeUnico ?? (sumar('unico')===null?null:conocidoDespuesDescuento);
   const mensual = incompleta ? null : propuesta.importeMensual ?? (sumar('mensual')===null?null:subtotalMensual);
   if ((unico !== null && !Number.isSafeInteger(unico)) || (mensual !== null && !Number.isSafeInteger(mensual))) throw new ComercialError("importe_fuera_de_rango",422);
   return { moneda: "MXN" as const, conceptos, unico, mensual,pendientes,subtotalUnico,subtotalMensual,
+    promocion:propuesta.promocion??null,conocidoDespuesDescuento,
+    ajusteUnico:propuesta.importeUnico===undefined?0:propuesta.importeUnico-conocidoDespuesDescuento,
+    ajusteMensual:propuesta.importeMensual===undefined?0:propuesta.importeMensual-subtotalMensual,
     condiciones: propuesta.condiciones ?? "Aplican las condiciones de cada concepto del catálogo adjunto.",
     especial: propuesta.especial ?? null,
-    requiereAprobacion: pendientes.length>0 || !!propuesta.especial || propuesta.importeUnico !== undefined || propuesta.importeMensual !== undefined ||
+    requiereAprobacion: !!propuesta.promocion || pendientes.length>0 || !!propuesta.especial || propuesta.importeUnico !== undefined || propuesta.importeMensual !== undefined ||
       unico === null || mensual === null || conceptos.some(c => c.producto.precioEstado !== "aprobado"),
   };
 }

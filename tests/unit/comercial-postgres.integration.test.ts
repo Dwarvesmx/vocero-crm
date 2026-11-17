@@ -137,6 +137,25 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect((historia.versiones.find(v=>v.version===1)!.snapshot as Snapshot).unico).toBeNull();
     await expect(comercialLeer({...bot,conversationId:'segundo'},'segundo',q.cotizacionId)).rejects.toMatchObject({code:'no_encontrada'});
   });
+  it('Promoción administrativa versionada, consultable por Lukas y sin aviso al revisar',async()=>{
+    await call(owner,{action:'catalogo',producto});
+    const q=await preparar();
+    const ref={conversationId:'conv',cotizacionId:q.cotizacionId,version:1};
+    const promocion={nombre:'Lanzamiento sintético',descuento:20000,condiciones:'Una sola vez en instalación'};
+    await expect(preparar({conceptos:[{productoId:'estandar',cantidad:1}],promocion})).rejects.toMatchObject({code:'sin_permiso'});
+    await call(owner,{action:'revisar',...ref,propuesta:{conceptos:[{productoId:'estandar',cantidad:1}],promocion}});
+    const revision=await comercialLeer(bot,'conv',q.cotizacionId);
+    expect(revision.cotizaciones[0]).toMatchObject({estado:'pendiente',version:2,snapshot:{unico:129900,subtotalUnico:149900,promocion}});
+    const [avisos]=await sql`select count(*)::int as n from comercial_evento where cotizacion_id=${q.cotizacionId} and action='aviso_aprobacion'`;
+    expect(avisos!.n).toBe(0);
+    await call(owner,{action:'decidir',...ref,version:2,decision:'aprobar',motivo:'Precio y promoción autorizados'});
+    const consulta=await comercialLeer(bot,'conv',q.cotizacionId);
+    expect(consulta.cotizaciones[0]).toMatchObject({estado:'aprobada',aprobada_version:2,snapshot:{unico:129900,promocion}});
+    const versiones=await comercialLeer(owner,'conv',q.cotizacionId);
+    expect((versiones.versiones.find(v=>v.version===1)!.snapshot as Snapshot).unico).toBe(149900);
+    expect((await comercialLeer(owner)).productos.find(p=>p.id==='estandar')!.unico).toBe(149900);
+    await expect(call(bot,{action:'revisar',...ref,version:2,propuesta:{conceptos:[{productoId:'estandar',cantidad:1}],promocion}})).rejects.toMatchObject({code:'sin_permiso'});
+  });
   it("Aviso durable: consentimiento, duplicados, ventana y continuidad hasta pedido pendiente",async()=>{
     process.env.ZERNIO_WHATSAPP_ENABLED='true';
     await sql`insert into zernio_whatsapp_credentials(id,organization_id,account_ref,token_cipher,token_iv,token_tag,secret_cipher,secret_iv,secret_tag,enabled)

@@ -33,7 +33,7 @@ export type Propuesta = z.infer<typeof propuestaSchema>;
 export const comandoSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("sembrar"), requestKey: id }).strict(),
   z.object({ action: z.literal("catalogo"), requestKey: id, producto: productoSchema }).strict(),
-  z.object({ action: z.literal("preparar"), requestKey: id, conversationId: id, propuesta: propuestaSchema }).strict(),
+  z.object({ action: z.literal("preparar"), requestKey: id, conversationId: id, propuesta: propuestaSchema, mensajeOrigenId: id.optional(), cotizacionId: id.optional(), nuevaNegociacion: z.boolean().optional(), actualizarAlcance: z.boolean().optional(), version:z.number().int().positive().optional() }).strict(),
   z.object({ action: z.literal("revisar"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), propuesta: propuestaSchema }).strict(),
   z.object({ action: z.literal("decidir"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), decision: z.enum(["aprobar", "rechazar"]), motivo: texto }).strict(),
   z.object({ action: z.literal("solicitar_aprobacion"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), mensajeAvisoId: id.optional() }).strict(),

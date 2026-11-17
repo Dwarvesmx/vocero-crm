@@ -18,7 +18,13 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
   const bot: Actor = {organizationId:owner.organizationId,role:"bot",conversationId:"conv"};
   let sql: ReturnType<typeof getSql>;
   const producto: Producto={id:"estandar",nombre:"Servicio sintético",descripcion:"Solo pruebas",tipo:"producto",caracteristicas:["Una entrega"],exclusiones:["Sin soporte indefinido"],unico:149900,mensual:0,precioEstado:"aprobado",limites:{secciones:5},compatibles:[],activo:true,condiciones:"Pago único; vigencia prueba"};
-  const call = (actor:Actor,cmd:Record<string,unknown>) => comercialEjecutar(actor,comandoSchema.parse({requestKey:randomUUID(),...cmd}));
+  const call = async (actor:Actor,cmd:Record<string,unknown>) => {
+    if(!actor.userId && cmd.action==='preparar' && !cmd.mensajeOrigenId && cmd.conversationId===actor.conversationId){
+      const id=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${id},${actor.organizationId},${String(cmd.conversationId)},'in','Quiero otra cotización para un proyecto nuevo')`;
+      cmd={...cmd,mensajeOrigenId:id,nuevaNegociacion:true};
+    }
+    return comercialEjecutar(actor,comandoSchema.parse({requestKey:randomUUID(),...cmd}));
+  };
   const preparar = async (propuesta:Record<string,unknown>={conceptos:[{productoId:"estandar",cantidad:1}]}) => call(bot,{action:"preparar",conversationId:"conv",propuesta}) as Promise<{cotizacionId:string;version:number;estado:string;snapshot:Snapshot}>;
   beforeAll(async()=>{
     if (!process.env.DATABASE_URL?.includes("127.0.0.1:55546/") || process.env.OPENROUTER_API_TOKEN || process.env.BRAIN_DISPATCH_URL) throw Error("Requiere laboratorio aislado");
@@ -38,7 +44,8 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
   });
   afterAll(async()=>{await sql?.end();});
   it("A. precio aprobado y reintento concurrente sin duplicación ni cambio de payload",async()=>{
-    const cmd = comandoSchema.parse({action:"preparar",conversationId:"conv",requestKey:randomUUID(),propuesta:{conceptos:[{productoId:"estandar",cantidad:1}]}});
+    const origen=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${origen},${owner.organizationId},'conv','in','Quiero otra cotización para un proyecto nuevo')`;
+    const cmd = comandoSchema.parse({action:"preparar",conversationId:"conv",mensajeOrigenId:origen,nuevaNegociacion:true,requestKey:randomUUID(),propuesta:{conceptos:[{productoId:"estandar",cantidad:1}]}});
     const [a,b]=await Promise.all([comercialEjecutar(bot,cmd),comercialEjecutar(bot,cmd)]);
     expect(a).toEqual(b); expect(a).toMatchObject({estado:"aprobada",snapshot:{unico:149900,mensual:0}});
     await expect(comercialEjecutar(bot,{...cmd,propuesta:{conceptos:[{productoId:"estandar",cantidad:2}]}} as Comando)).rejects.toMatchObject({code:"clave_reutilizada"});
@@ -112,6 +119,68 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       const data=await comercialLeer(owner,undefined,q.cotizacionId);expect(data.cotizaciones[0]).toMatchObject({estado:'aceptada',accepted_message_id:id});expect(data.pedidos[0]!.id).toBe(result.pedido.id);
       expect(data.eventos.filter(e=>['aceptar','contratar'].includes(e.action))).toHaveLength(2);
     }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}
+  });
+  it('Estética: runtime Nea conserva una cotización y un consentimiento entre tres turnos',async()=>{
+    await sql`insert into contact(id,organization_id,wa_identity,name) values('contacto-estetica-integrada',${owner.organizationId},'estetica-integrada','Estética sintética')`;
+    await sql`insert into conversation(id,organization_id,contact_id,is_test) values('estetica-integrada',${owner.organizationId},'contacto-estetica-integrada',false)`;
+    await call(owner,{action:'catalogo',producto:{...producto,id:'citas-integrada',unico:249000,precioEstado:'orientativo'}});
+    const server=createServer(async(req,res)=>{
+      try{
+        const chunks:Buffer[]=[];for await(const chunk of req)chunks.push(Buffer.from(chunk));
+        if(req.url==='/fixture/message'){
+          const body=JSON.parse(Buffer.concat(chunks).toString());const id=randomUUID();
+          await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${id},${owner.organizationId},'estetica-integrada',${body.direction},${body.text})`;
+          res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({id}));return;
+        }
+        const request=new Request(`http://127.0.0.1${req.url}`,{method:req.method,headers:{'x-api-key':process.env.BOT_API_KEY!,'content-type':'application/json'},...(req.method==='POST'?{body:Buffer.concat(chunks).toString()}:{})});
+        const response=req.method==='GET'?await botGet(request):await botPost(request);
+        res.writeHead(response.status,{'content-type':'application/json'});res.end(await response.text());
+      }catch{res.writeHead(500);res.end('{}');}
+    });
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const address=server.address();if(!address||typeof address==='string')throw Error('Sin puerto local');
+      const output=await new Promise<string>((yes,no)=>{
+        const child=spawn(resolve('../tmp/nea-test-venv/Scripts/python.exe'),['tests/comercial_continuidad_api.py',`http://127.0.0.1:${address.port}`],{cwd:resolve('../nea-comercial-v1'),windowsHide:true,env:{...process.env,PYTHONPATH:resolve('../nea-comercial-v1')}});
+        let stdout='',stderr='';child.stdout.on('data',c=>stdout+=c);child.stderr.on('data',c=>stderr+=c);child.on('error',no);child.on('exit',code=>code===0?yes(stdout):no(Error(stderr)));
+      });
+      const resultado=JSON.parse(output);expect(resultado).toMatchObject({version:1,estado:'pendiente'});
+      const data=await comercialLeer(owner,'estetica-integrada');expect(data.cotizaciones).toHaveLength(1);expect(data.cotizaciones[0]!.snapshot.subtotalUnico).toBe(249000);
+      expect(data.eventos.filter(e=>e.action==='solicitar_aprobacion'&&e.data.mensajeAvisoId)).toHaveLength(1);
+    }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}
+  });
+  it('Negociación estable: concurrencia, origen, consentimiento, versiones y proyectos distintos',async()=>{
+    await sql`insert into contact(id,organization_id,wa_identity,name) values('contacto-estetica',${owner.organizationId},'estetica','Estética sintética')`;
+    await sql`insert into conversation(id,organization_id,contact_id,is_test) values('estetica',${owner.organizationId},'contacto-estetica',false)`;
+    const actor={...bot,conversationId:'estetica'};
+    await call(owner,{action:'catalogo',producto:{...producto,id:'citas-prueba',unico:249000,precioEstado:'orientativo'}});
+    const mensaje=async(text:string,direction='in')=>{const id=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${id},${owner.organizationId},'estetica',${direction},${text})`;return id;};
+    const propuesta={conceptos:[{productoId:'citas-prueba',cantidad:1}]};
+    const origen=await mensaje('Tengo una estética y quiero cotizar Servicios y Citas');
+    const cmd={action:'preparar',conversationId:'estetica',mensajeOrigenId:origen,propuesta};
+    const requestKey=randomUUID();
+    const [a,b]=await Promise.all([call(actor,{...cmd,requestKey}),call(actor,cmd)]);expect(a).toEqual(b);expect(a.snapshot).toMatchObject({subtotalUnico:249000});
+    const id=String(a.cotizacionId);const ref={conversationId:'estetica',cotizacionId:id,version:1};
+    await call(actor,{action:'solicitar_aprobacion',...ref});
+    const sinPregunta=await mensaje('Sí');await expect(call(actor,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:sinPregunta})).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
+    await mensaje('¿Te aviso por este WhatsApp cuando tu cotización esté autorizada?','out');
+    const si=await mensaje('Sí');const permisos=await Promise.all([call(actor,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:si}),call(actor,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:si})]);for(const permiso of permisos)expect(permiso).toMatchObject({consentimiento:{registrado:true}});
+    const corto=await mensaje('Sí, avísame');expect(await call(actor,{...cmd,mensajeOrigenId:corto})).toMatchObject({cotizacionId:id,version:1,consentimiento:{registrado:true}});
+    await call(actor,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:corto});
+    const [conteo]=await sql`select count(*)::int n from comercial_evento where cotizacion_id=${id} and action='solicitar_aprobacion' and data->>'mensajeAvisoId' is not null`;expect(conteo!.n).toBe(1);
+    const consulta=await comercialLeer(actor,'estetica');expect(consulta.cotizaciones).toHaveLength(1);expect(consulta.cotizaciones[0]!.consentimiento).toMatchObject({registrado:true});
+    await call(owner,{action:'decidir',...ref,decision:'aprobar',motivo:'Revisión sintética'});
+    expect(await call(actor,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:corto})).toMatchObject({estado:'aprobada',consentimiento:{registrado:true}});
+    const seguir=await mensaje('Sigo esperando, no cambia la solicitud');expect(await call(actor,{...cmd,mensajeOrigenId:seguir})).toMatchObject({cotizacionId:id,version:1});
+    const cambio=await mensaje('Agrega una segunda unidad a esta misma propuesta');const revisar={...cmd,mensajeOrigenId:cambio,actualizarAlcance:true,version:1,propuesta:{conceptos:[{productoId:'citas-prueba',cantidad:2}]}};
+    const v2=await call(actor,revisar);expect(v2).toMatchObject({cotizacionId:id,version:2,estado:'pendiente',consentimiento:{registrado:false}});expect(await call(actor,revisar)).toMatchObject({version:2});expect(await call(actor,{...cmd,requestKey})).toMatchObject({version:2,consentimiento:{registrado:false}});
+    await expect(call(actor,{action:'solicitar_aprobacion',...ref})).rejects.toMatchObject({code:'version_desactualizada'});
+    const viejo=await mensaje('Agrega un detalle a la versión vieja');await expect(call(actor,{...cmd,mensajeOrigenId:viejo,actualizarAlcance:true,version:1})).rejects.toMatchObject({code:'version_desactualizada'});
+    const segunda=await mensaje('Quiero otra cotización para un proyecto distinto');const otra=await call(actor,{...cmd,mensajeOrigenId:segunda,nuevaNegociacion:true});expect(otra.cotizacionId).not.toBe(id);
+    const proyecto=await mensaje('Ahora quiero cotizar una cafetería como nuevo proyecto');const tercera=await call(actor,{...cmd,mensajeOrigenId:proyecto,nuevaNegociacion:true});expect(tercera.cotizacionId).not.toBe(otra.cotizacionId);
+    const ambiguo=await mensaje('Sí');await expect(call(actor,{...cmd,mensajeOrigenId:ambiguo,nuevaNegociacion:true})).rejects.toMatchObject({code:'nueva_intencion_no_acreditada'});
+    await expect(call(bot,{...cmd,conversationId:'conv',mensajeOrigenId:origen})).rejects.toMatchObject({code:'mensaje_origen_invalido'});
+    expect((await comercialLeer(actor,'estetica')).cotizaciones).toHaveLength(3);
   });
   it("G. bot y miembros no pueden cambiar precios, decisiones o pagos; inputs estrictos",async()=>{
     await expect(call(bot,{action:"catalogo",producto})).rejects.toMatchObject({code:"sin_permiso"});

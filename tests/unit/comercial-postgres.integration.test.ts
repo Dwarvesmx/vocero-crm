@@ -117,6 +117,26 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     process.env.COMERCIAL_BOT_ORG_ID="no-autorizada";expect((await botGet(new Request(url,{headers}))).status).toBe(403);process.env.COMERCIAL_BOT_ORG_ID=owner.organizationId;
     process.env.COMERCIAL_V1_ENABLED="false";expect((await botGet(new Request(url,{headers}))).status).toBe(404);process.env.COMERCIAL_V1_ENABLED="true";
   });
+  it('Propuesta flexible conserva subtotal, bloquea finalización y resuelve en nueva versión',async()=>{
+    await call(owner,{action:'catalogo',producto});
+    await call(owner,{action:'catalogo',producto:{...producto,id:'extra2',tipo:'extra',unico:29000,compatibles:['estandar']}});
+    const pendientes=[{descripcion:'Enlaces sociales a medida',solicitud:'Cliente solicita enlaces adicionales',estado:'pendiente',unico:null,mensual:null}];
+    const propuesta={conceptos:[{productoId:'estandar',cantidad:1},{productoId:'extra',cantidad:1,baseId:'estandar'},{productoId:'extra2',cantidad:1,baseId:'estandar'}],pendientes};
+    const q=await preparar(propuesta);
+    const ref={conversationId:'conv',cotizacionId:q.cotizacionId,version:1};
+    expect(q.snapshot).toMatchObject({subtotalUnico:207900,unico:null,mensual:null});
+    await expect(call(owner,{action:'decidir',...ref,decision:'aprobar',motivo:'Intento incompleto'})).rejects.toMatchObject({code:'importe_pendiente'});
+    await expect(call(bot,{action:'aceptar',...ref,mensajeId:'x'})).rejects.toMatchObject({code:'falta_aprobacion'});
+    await expect(call(bot,{action:'contratar',...ref})).rejects.toMatchObject({code:'falta_aceptacion'});
+    await expect(preparar({...propuesta,pendientes:[{...pendientes[0],estado:'incluido',condiciones:'Incluido'}]})).rejects.toMatchObject({code:'sin_permiso'});
+    const revisada=await call(owner,{action:'revisar',...ref,propuesta:{...propuesta,pendientes:[{...pendientes[0],estado:'cotizado',unico:15000,mensual:0,condiciones:'Dos enlaces adicionales'}]}});
+    expect(revisada).toMatchObject({version:2,estado:'pendiente',snapshot:{unico:222900}});
+    await call(owner,{action:'decidir',...ref,version:2,decision:'aprobar',motivo:'Alcance y precio completos'});
+    const historia=await comercialLeer(owner,'conv',q.cotizacionId);
+    expect(historia.versiones).toHaveLength(2);
+    expect((historia.versiones.find(v=>v.version===1)!.snapshot as Snapshot).unico).toBeNull();
+    await expect(comercialLeer({...bot,conversationId:'segundo'},'segundo',q.cotizacionId)).rejects.toMatchObject({code:'no_encontrada'});
+  });
   it("Aviso durable: consentimiento, duplicados, ventana y continuidad hasta pedido pendiente",async()=>{
     process.env.ZERNIO_WHATSAPP_ENABLED='true';
     await sql`insert into zernio_whatsapp_credentials(id,organization_id,account_ref,token_cipher,token_iv,token_tag,secret_cipher,secret_iv,secret_tag,enabled)

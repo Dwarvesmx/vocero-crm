@@ -12,10 +12,19 @@ export const productoSchema = z.object({
   compatibles: z.array(id).max(50), activo: z.boolean(), condiciones: texto,
 }).strict();
 export type Producto = z.infer<typeof productoSchema>;
+export const pendienteSchema = z.object({descripcion:texto,solicitud:texto,
+  estado:z.enum(['pendiente','cotizado','incluido','rechazado']).default('pendiente'),
+  unico:dinero.nullable().default(null),mensual:dinero.nullable().default(null),condiciones:texto.optional(),
+}).strict().superRefine((p,ctx)=>{
+  if(p.estado==='cotizado' && (p.unico===null || p.mensual===null || !p.condiciones)) ctx.addIssue({code:'custom',message:'Falta precio o condiciones del concepto'});
+  if(p.estado!=='cotizado' && (p.unico!==null || p.mensual!==null)) ctx.addIssue({code:'custom',message:'Solo un concepto cotizado lleva precio'});
+  if(['incluido','rechazado'].includes(p.estado) && !p.condiciones) ctx.addIssue({code:'custom',message:'Documenta la resolución'});
+});
 export const propuestaSchema = z.object({
   conceptos: z.array(z.object({ productoId: id, cantidad: z.number().int().min(1).max(1000),
     baseId: id.optional() }).strict()).min(1).max(40),
   condiciones: texto.optional(), especial: texto.optional(),
+  pendientes:z.array(pendienteSchema).max(40).optional(),
   // Solo admin. Su presencia invalida la autorización automática.
   importeUnico: dinero.optional(), importeMensual: dinero.optional(),
 }).strict();
@@ -64,13 +73,17 @@ export function calcular(propuesta: Propuesta, catalogo: Producto[]) {
   });
   const sumar = (campo: "unico" | "mensual") => conceptos.some(c => c.producto[campo] === null) ? null :
     conceptos.reduce((s,c) => s + c.producto[campo]! * c.cantidad, 0);
-  const unico = propuesta.importeUnico ?? sumar("unico");
-  const mensual = propuesta.importeMensual ?? sumar("mensual");
+  const pendientes=propuesta.pendientes??[];
+  const incompleta=pendientes.some(p=>p.estado==='pendiente');
+  const subtotalUnico=conceptos.reduce((s,c)=>s+(c.producto.unico??0)*c.cantidad,0)+pendientes.reduce((s,p)=>s+(p.estado==='cotizado'?p.unico!:0),0);
+  const subtotalMensual=conceptos.reduce((s,c)=>s+(c.producto.mensual??0)*c.cantidad,0)+pendientes.reduce((s,p)=>s+(p.estado==='cotizado'?p.mensual!:0),0);
+  const unico = incompleta ? null : propuesta.importeUnico ?? (sumar('unico')===null?null:subtotalUnico);
+  const mensual = incompleta ? null : propuesta.importeMensual ?? (sumar('mensual')===null?null:subtotalMensual);
   if ((unico !== null && !Number.isSafeInteger(unico)) || (mensual !== null && !Number.isSafeInteger(mensual))) throw new ComercialError("importe_fuera_de_rango",422);
-  return { moneda: "MXN" as const, conceptos, unico, mensual,
+  return { moneda: "MXN" as const, conceptos, unico, mensual,pendientes,subtotalUnico,subtotalMensual,
     condiciones: propuesta.condiciones ?? "Aplican las condiciones de cada concepto del catálogo adjunto.",
     especial: propuesta.especial ?? null,
-    requiereAprobacion: !!propuesta.especial || propuesta.importeUnico !== undefined || propuesta.importeMensual !== undefined ||
+    requiereAprobacion: pendientes.length>0 || !!propuesta.especial || propuesta.importeUnico !== undefined || propuesta.importeMensual !== undefined ||
       unico === null || mensual === null || conceptos.some(c => c.producto.precioEstado !== "aprobado"),
   };
 }

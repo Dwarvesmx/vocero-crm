@@ -3,6 +3,9 @@ vi.mock('@/server/zernio/whatsapp-credenciales',()=>({obtenerZernioWhatsAppPorOr
 vi.mock('@/server/zernio/whatsapp-envio',()=>({enviarTextoWhatsAppZernio:vi.fn(async()=> 'wamid-aviso-sintetico')}));
 import { barrerEnviosWhatsAppZernio } from '@/server/zernio/whatsapp-outbox';
 import { enviarTextoWhatsAppZernio } from '@/server/zernio/whatsapp-envio';
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getDb, getSql } from "@/lib/db";
 import { comercialEjecutar, comercialLeer } from "@/server/comercial/service";
@@ -77,6 +80,38 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect((await comercialLeer(bot,"conv",q.cotizacionId)).pedidos[0]!.estado).toBe("pagado");
     await expect(call(owner,{action:"pago",...ref,estado:"pendiente"})).rejects.toMatchObject({code:"pago_terminal"});
     await expect(sql`update comercial_pedido set evidencia=null where organization_id=${owner.organizationId} and cotizacion_id=${q.cotizacionId}`).rejects.toMatchObject({code:"23514"});
+  });
+  it("Cierre integrado V2: evidencia válida, herramientas Nea, aceptación y pedido pendiente",async()=>{
+    await call(owner,{action:"catalogo",producto});
+    const q=await preparar({conceptos:[{productoId:"estandar",cantidad:1}],especial:"Revisión sintética"});
+    const ref={conversationId:"conv",cotizacionId:q.cotizacionId,version:2};
+    await call(owner,{action:"revisar",...ref,version:1,propuesta:{conceptos:[{productoId:"estandar",cantidad:1}],importeUnico:217900}});
+    await call(owner,{action:"decidir",...ref,decision:"aprobar",motivo:"V2 autorizada"});
+    for(const [id,conversation,scope,fecha] of [["previo","conv","commercial","2000-01-01"],["ajena","segundo","commercial",null]] as const){
+      await sql`insert into message(id,organization_id,conversation_id,direction,text,scope_kind,created_at) values(${id},${owner.organizationId},${conversation},'in','Sí',${scope},coalesce(${fecha}::timestamptz,clock_timestamp()))`;
+      await expect(call(bot,{action:"aceptar",...ref,mensajeId:id})).rejects.toMatchObject({code:"evidencia_aceptacion_invalida"});
+    }
+    expect((await comercialLeer(owner,undefined,q.cotizacionId)).pedidos).toHaveLength(0);
+    await expect(call(bot,{action:"contratar",...ref})).rejects.toMatchObject({code:"falta_aceptacion"});
+    const id=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text,scope_kind) values(${id},${owner.organizationId},'conv','in','Sí, acepto la propuesta aprobada','commercial')`;
+    const server=createServer(async(req,res)=>{
+      try{
+        const chunks:Buffer[]=[];for await(const chunk of req)chunks.push(Buffer.from(chunk));
+        const response=await botPost(new Request('http://127.0.0.1/api/bot/comercial',{method:'POST',headers:{'x-api-key':process.env.BOT_API_KEY!,'content-type':'application/json'},body:Buffer.concat(chunks).toString()}));
+        res.writeHead(response.status,{'content-type':'application/json'});res.end(await response.text());
+      }catch{res.writeHead(500);res.end('{}');}
+    });
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const address=server.address();if(!address||typeof address==='string')throw Error('Sin puerto local');
+      const output=await new Promise<string>((yes,no)=>{
+        const child=spawn(resolve('../tmp/nea-test-venv/Scripts/python.exe'),['tests/comercial_cierre_api.py',`http://127.0.0.1:${address.port}`,q.cotizacionId,id],{cwd:resolve('../nea-comercial-v1'),windowsHide:true,env:{...process.env,PYTHONPATH:resolve('../nea-comercial-v1')}});
+        let stdout='',stderr='';child.stdout.on('data',c=>stdout+=c);child.stderr.on('data',c=>stderr+=c);child.on('error',no);child.on('exit',code=>code===0?yes(stdout):no(Error(stderr)));
+      });
+      const result=JSON.parse(output);expect(result.pedido).toMatchObject({cotizacion_id:q.cotizacionId,version:2,estado:'pendiente',enlace:null});
+      const data=await comercialLeer(owner,undefined,q.cotizacionId);expect(data.cotizaciones[0]).toMatchObject({estado:'aceptada',accepted_message_id:id});expect(data.pedidos[0]!.id).toBe(result.pedido.id);
+      expect(data.eventos.filter(e=>['aceptar','contratar'].includes(e.action))).toHaveLength(2);
+    }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}
   });
   it("G. bot y miembros no pueden cambiar precios, decisiones o pagos; inputs estrictos",async()=>{
     await expect(call(bot,{action:"catalogo",producto})).rejects.toMatchObject({code:"sin_permiso"});

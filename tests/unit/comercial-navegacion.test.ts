@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {ComercialPanel} from '@/components/comercial/panel';
+import {ComercialPanel,ResumenCotizacion,DesgloseCotizacion} from '@/components/comercial/panel';
 import {PropuestaEditor} from '@/components/comercial/propuesta-editor';
 import {navegarComercial,navegacionInicial} from '@/components/comercial/navegacion-comercial';
 import {calcular,propuestaSchema,type Producto} from '@/server/comercial/contracts';
@@ -21,6 +21,13 @@ describe('Navegación de cotizaciones',()=>{
   expect(editor.indexOf('Conceptos especiales solicitados')).toBeLessThan(editor.indexOf('Promoción administrativa'));
   expect(editor.indexOf('Promoción administrativa')).toBeLessThan(editor.indexOf('Guardar propuesta en una nueva versión'));
   expect(editor).not.toContain('sticky bottom-0');
+ });
+ it('muestra total autorizado con ajuste y separa conceptos sin repetir subtotales',()=>{
+  const ajustada={...snapshot,unico:217900,ajusteUnico:68000};
+  const resumen=renderToStaticMarkup(createElement(ResumenCotizacion,{snapshot:ajustada,estado:'aprobada'}));
+  expect(resumen).toContain('Total aprobado');expect(resumen).toContain('2,179.00');expect(resumen).not.toContain('Subtotal conocido');
+  const detalle=renderToStaticMarkup(createElement(DesgloseCotizacion,{snapshot:ajustada,estado:'aprobada'}));
+  expect(detalle.match(/Subtotal antes de descuentos/g)).toHaveLength(1);expect(detalle).toContain('Productos base');expect(detalle).toContain('Extras del catálogo');expect(detalle).toContain('Conceptos especiales resueltos');expect(detalle).toContain('Ajuste administrativo único');expect(detalle).toContain('Condiciones y alcance');
  });
  it('abre un solo editor y conserva sus borradores al navegar o cambiar la versión remota',()=>{
   let s=navegarComercial(navegacionInicial,{tipo:'editar',id:'uno',version:1,snapshot});

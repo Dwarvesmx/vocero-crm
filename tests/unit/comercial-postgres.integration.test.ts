@@ -120,6 +120,49 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       expect(data.eventos.filter(e=>['aceptar','contratar'].includes(e.action))).toHaveLength(2);
     }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}
   });
+  it.skipIf(process.env.COMERCIAL_REAL_MODEL_TEST!=='1')('Asesor: modelo autónomo real contra API y PostgreSQL aislados',async()=>{
+    await call(owner,{action:'sembrar'});
+    const server=createServer(async(req,res)=>{
+      try{
+        const chunks:Buffer[]=[];for await(const chunk of req)chunks.push(Buffer.from(chunk));const raw=Buffer.concat(chunks).toString();
+        if(req.url==='/fixture/start'){
+          const body=JSON.parse(raw);const conv='real-model-'+randomUUID(),contact='real-model-'+randomUUID();
+          await sql`insert into contact(id,organization_id,wa_identity,name) values(${contact},${owner.organizationId},${contact},'Barbería sintética')`;
+          await sql`insert into conversation(id,organization_id,contact_id,is_test) values(${conv},${owner.organizationId},${contact},false)`;
+          let quote=null;
+          if(body.estado){
+            const actor={...bot,conversationId:conv};const q=await call(actor,{action:'preparar',conversationId:conv,propuesta:{conceptos:[{productoId:'citas',cantidad:1}]}});
+            quote=q.cotizacionId;const ref={conversationId:conv,cotizacionId:quote,version:1};
+            await call(actor,{action:'solicitar_aprobacion',...ref});
+            if(body.estado==='aprobada')await call(owner,{action:'decidir',...ref,decision:'aprobar',motivo:'Prueba sintética aprobada'});
+            await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${randomUUID()},${owner.organizationId},${conv},'out',${body.estado==='aprobada'?'La propuesta está aprobada por $2,490 MXN. ¿Aceptas esas condiciones?':'¿Te aviso por este WhatsApp cuando tu cotización esté autorizada?'})`;
+          }
+          res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({conversationId:conv,cotizacionId:quote}));return;
+        }
+        if(req.url==='/fixture/message'){
+          const body=JSON.parse(raw),id=randomUUID();if(!String(body.conversationId).startsWith('real-model-'))throw Error('Fuera de fixture');
+          await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${id},${owner.organizationId},${body.conversationId},${body.direction},${body.text})`;
+          res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({id}));return;
+        }
+        const headers={'x-api-key':process.env.BOT_API_KEY!,'content-type':'application/json'};
+        if(req.url?.startsWith('/fixture/state')){
+          const conversationId=new URL('http://local'+req.url).searchParams.get('conversationId')!;
+          const state=await comercialLeer({...bot,conversationId},conversationId);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(state));return;
+        }
+        const request=new Request('http://127.0.0.1'+req.url,{method:req.method,headers,...(req.method==='POST'?{body:raw}:{})});
+        const response=req.method==='GET'?await botGet(request):await botPost(request);
+        res.writeHead(response.status,{'content-type':'application/json'});res.end(await response.text());
+      }catch{res.writeHead(500);res.end('{}');}
+    });
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+    try{
+      const address=server.address();if(!address||typeof address==='string')throw Error('Puerto local ausente');
+      await new Promise<void>((yes,no)=>{
+        const child=spawn(resolve('../tmp/nea-test-venv/Scripts/python.exe'),['tests/comercial_asesor_modelo_real.py',`http://127.0.0.1:${address.port}`,process.env.COMERCIAL_REAL_MODEL??'google/gemini-3-flash-preview',process.env.COMERCIAL_REAL_CASES??''],{cwd:resolve('../nea-comercial-v1'),windowsHide:true,env:{...process.env,PYTHONPATH:resolve('../nea-comercial-v1')}});
+        let error='';child.stdout.on('data',c=>process.stdout.write(c));child.stderr.on('data',c=>error+=c);child.on('error',no);child.on('exit',code=>code===0?yes():no(Error(error.slice(-7000))));
+      });
+    }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}
+  },600000);
   it('Estética: runtime Nea conserva una cotización y un consentimiento entre tres turnos',async()=>{
     await sql`insert into contact(id,organization_id,wa_identity,name) values('contacto-estetica-integrada',${owner.organizationId},'estetica-integrada','Estética sintética')`;
     await sql`insert into conversation(id,organization_id,contact_id,is_test) values('estetica-integrada',${owner.organizationId},'contacto-estetica-integrada',false)`;
@@ -146,7 +189,7 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       });
       const resultado=JSON.parse(output);expect(resultado).toMatchObject({version:1,estado:'pendiente'});
       const data=await comercialLeer(owner,'estetica-integrada');expect(data.cotizaciones).toHaveLength(1);expect(data.cotizaciones[0]!.snapshot.subtotalUnico).toBe(249000);
-      expect(data.eventos.filter(e=>e.action==='solicitar_aprobacion'&&e.data.mensajeAvisoId)).toHaveLength(1);
+      expect(data.eventos.filter(e=>e.cotizacion_id===resultado.cotizacionId&&e.action==='solicitar_aprobacion'&&e.data.mensajeAvisoId)).toHaveLength(1);
     }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}
   });
   it('Negociación estable: concurrencia, origen, consentimiento, versiones y proyectos distintos',async()=>{

@@ -3,6 +3,7 @@ import type { TransactionSql } from "postgres";
 import { getSql } from "@/lib/db";
 import { calcular, ComercialError, comandoSchema, enlaceSeguro, exigirAdmin, productoSchema,
   type Actor, type Comando, type Snapshot } from "./contracts";
+import { respuestaAviso, autorizacionAvisoCompleta } from "./consentimiento";
 import semilla from "./catalogo-v3.json";
 
 export const comercialEnabled = () => process.env.COMERCIAL_V1_ENABLED === "true";
@@ -189,7 +190,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
             const [m] = await sql`select text,created_at from message where organization_id=${actor.organizationId}
               and conversation_id=${cmd.conversationId} and id=${cmd.mensajeAvisoId} and direction='in'
               and scope_kind='commercial' and created_at>=${v!.created_at} and created_at<=clock_timestamp()`;
-            const completa=m&&/^s[ií][,\s]+av[ií]same\s+(?:por (?:este )?whatsapp\s+)?cuando\s+(?:mi |la )?cotizaci[oó]n\s+est[eé]\s+(?:autorizada|aprobada)[.!]?$/iu.test(String(m.text).trim());
+            const completa=m&&autorizacionAvisoCompleta(String(m.text));
             if(!completa){
               const [pregunta]=m?await sql`select e.id from comercial_evento e where e.organization_id=${actor.organizationId} and e.cotizacion_id=${quoteId}
                 and e.action='solicitar_aprobacion' and e.data->>'version'=${String(cmd.version)} and e.created_at<=${m.created_at}
@@ -197,7 +198,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                   and otra.data->>'conversationId'=${cmd.conversationId} and otra.created_at>e.created_at and otra.created_at<=${m.created_at}) limit 1`:[];
               const [salida]=m?await sql`select text from message where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
                 and scope_kind='commercial' and direction='out' and created_at>=${v!.created_at} and created_at<=${m.created_at} order by created_at desc limit 1`:[];
-              if(!m||!pregunta||!/^s[ií](?:[,\s]+av[ií]same)?[.!\s]*$/iu.test(String(m.text).trim())||
+              if(!m||!pregunta||!respuestaAviso(String(m.text))||
                 !/\baviso\b.*(?:cotizaci[oó]n|propuesta).*(?:autorizada|aprobada)/iu.test(String(salida?.text??'')))throw new ComercialError('consentimiento_no_acreditado',422);
             }
           }else if(permiso.preguntaPendiente)return await estadoCotizacion(sql,actor.organizationId,q);

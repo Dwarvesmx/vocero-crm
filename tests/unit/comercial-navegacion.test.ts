@@ -2,6 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ComercialPanel} from '@/components/comercial/panel';
+import {PropuestaEditor} from '@/components/comercial/propuesta-editor';
 import {navegarComercial,navegacionInicial} from '@/components/comercial/navegacion-comercial';
 import {calcular,propuestaSchema,type Producto} from '@/server/comercial/contracts';
 const producto:Producto={id:'web',nombre:'Página',descripcion:'Información completa',tipo:'producto',caracteristicas:[],exclusiones:[],unico:149900,mensual:0,precioEstado:'aprobado',limites:{},compatibles:[],activo:true,condiciones:'Alcance'};
@@ -12,6 +13,14 @@ describe('Navegación de cotizaciones',()=>{
   expect(navegacionInicial.panel).toBe('lista');expect(html).toContain('Buscar cotización o contacto');
   expect(html).toContain('No hay cotizaciones todavía.');expect(html).toContain('Nueva cotización');
   expect(html).toMatch(/<div hidden=""[^>]*><section[^>]*><h2>Nueva cotización<\/h2>/);
+ });
+ it('mantiene un panel desplazable y el botón después del contenido del editor',()=>{
+  const panel=renderToStaticMarkup(createElement(ComercialPanel));
+  expect(panel).toMatch(/<main class="[^"]*h-full[^"]*overflow-y-auto/);
+  const editor=renderToStaticMarkup(createElement(PropuestaEditor,{productos:[producto],busy:false,guardar:()=>{}}));
+  expect(editor.indexOf('Conceptos especiales solicitados')).toBeLessThan(editor.indexOf('Promoción administrativa'));
+  expect(editor.indexOf('Promoción administrativa')).toBeLessThan(editor.indexOf('Guardar propuesta en una nueva versión'));
+  expect(editor).not.toContain('sticky bottom-0');
  });
  it('abre un solo editor y conserva sus borradores al navegar o cambiar la versión remota',()=>{
   let s=navegarComercial(navegacionInicial,{tipo:'editar',id:'uno',version:1,snapshot});

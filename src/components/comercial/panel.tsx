@@ -52,7 +52,7 @@ export function ComercialPanel() {
     finally {setBusy(false);}
   }
   const enviar = (cmd: Record<string,unknown>) => ejecutar(cmd as Omit<Comando,"requestKey">);
-  return <main className="mx-auto min-w-0 w-full max-w-6xl space-y-4 p-3 sm:p-5 [overflow-wrap:anywhere]">
+  return <main className="mx-auto h-full min-w-0 w-full max-w-6xl space-y-4 overflow-y-auto p-3 sm:p-5 [overflow-wrap:anywhere]">
     <h1 className="text-2xl font-semibold">Comercial</h1>
     <p className="text-sm text-muted-foreground">Cotiza con alcance y condiciones autorizados. Aceptar una propuesta no confirma el pago.</p>
     <nav className="flex flex-wrap gap-2" aria-label="Vistas comerciales">{["Catálogo y extras","Cotizaciones y aprobaciones","Contrataciones y pagos"].map(v => <Button key={v} variant={vista===v?"default":"outline"} disabled={busy} className="min-h-11 h-auto max-w-full whitespace-normal px-4 py-2" onClick={()=>{setVista(v);setDetalle(null);}}>{v}</Button>)}</nav>

@@ -28,7 +28,7 @@ async function consentimiento(sql: TransactionSql, org:string, quote:string, ver
     join comercial_cotizacion q on q.organization_id=e.organization_id and q.id=e.cotizacion_id
     join comercial_version v on v.organization_id=q.organization_id and v.cotizacion_id=q.id and v.version=${version}
     left join message m on m.organization_id=e.organization_id and m.id=e.data->>'mensajeAvisoId' and m.conversation_id=q.conversation_id
-      and m.direction='in' and m.scope_kind='commercial' and m.created_at>=v.created_at and m.created_at<=clock_timestamp()
+      and m.direction='in' and m.scope_kind='commercial' and m.created_at<=clock_timestamp() and (m.created_at>=v.created_at or exists(select 1 from comercial_evento origen where origen.organization_id=e.organization_id and origen.cotizacion_id=e.cotizacion_id and origen.action='preparar' and origen.data->>'mensajeOrigenId'=m.id and origen.data->>'versionCreada'=${String(version)}))
     where e.organization_id=${org} and e.cotizacion_id=${quote} and e.action='solicitar_aprobacion' and e.data->>'version'=${String(version)}
     order by (m.id is not null) desc,e.created_at desc limit 1`;
   return {registrado:Boolean(e?.mensaje),preguntaPendiente:Boolean(e)&&!e?.mensaje};
@@ -53,7 +53,12 @@ export async function comercialLeer(actor: Actor, conversationId?: string, cotiz
     for(const q of cotizaciones) q.consentimiento=await consentimiento(sql,actor.organizationId,String(q.id),Number(q.version));
     const [activa]=conversationId ? await sql`select e.cotizacion_id from comercial_evento e join comercial_cotizacion q on q.id=e.cotizacion_id and q.organization_id=e.organization_id
       where e.organization_id=${actor.organizationId} and q.conversation_id=${conversationId} and e.action='preparar' and e.data->>'mensajeOrigenId' is not null order by e.created_at desc limit 1` : [];
-    const negociacionActiva=activa?.cotizacion_id??(cotizaciones.length===1?cotizaciones[0]!.id:null);
+    let negociacionActiva=activa?.cotizacion_id??(cotizaciones.length===1?cotizaciones[0]!.id:null);
+    const activaActual=cotizaciones.find(q=>q.id===negociacionActiva);
+    const [proyectoNuevo]=conversationId && activaActual ? await sql`select id from message where organization_id=${actor.organizationId} and conversation_id=${conversationId}
+      and direction='in' and scope_kind='commercial' and created_at>${activaActual.created_at} and created_at<=clock_timestamp()
+      and text ~* '(proyecto[[:space:]]+nuevo|nuevo[[:space:]]+proyecto|otro[[:space:]]+proyecto)' and text !~* '(no[[:space:]]+(es[[:space:]]+)?(un[[:space:]]+)?(proyecto[[:space:]]+nuevo|nuevo[[:space:]]+proyecto|otro[[:space:]]+proyecto))' limit 1` : [];
+    if(proyectoNuevo)negociacionActiva=null;
     if(conversationId){
       const [salida]=await sql`select text from message where organization_id=${actor.organizationId} and conversation_id=${conversationId} and direction='out' and scope_kind='commercial' order by created_at desc limit 1`;
       const [pregunta]=await sql`select cotizacion_id,data from comercial_evento where organization_id=${actor.organizationId} and action='solicitar_aprobacion' and data->>'conversationId'=${conversationId} order by created_at desc limit 1`;
@@ -68,7 +73,7 @@ export async function comercialLeer(actor: Actor, conversationId?: string, cotiz
     const versiones = actor.userId && cotizacionId ? await sql`select version,snapshot,created_at from comercial_version
       where organization_id=${actor.organizationId} and cotizacion_id=${cotizacionId} order by version` : [];
     return { productos: actor.userId ? productos : productos.filter(p => p.activo), cotizaciones,
-      negociacionActiva, pedidos: actor.userId ? pedidos : pedidos.map(p => ({ id:p.id,cotizacion_id:p.cotizacion_id,version:p.version,estado:p.estado,enlace:p.enlace })), eventos, versiones };
+      negociacionActiva, nuevoProyectoPendiente:Boolean(proyectoNuevo), pedidos: actor.userId ? pedidos : pedidos.map(p => ({ id:p.id,cotizacion_id:p.cotizacion_id,version:p.version,estado:p.estado,enlace:p.enlace })), eventos, versiones };
   });
 }
 
@@ -153,7 +158,16 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
         const [activa]=await sql`select cotizacion_id from comercial_evento where organization_id=${actor.organizationId} and action='preparar'
           and data->>'conversationId'=${cmd.conversationId} and data->>'mensajeOrigenId' is not null order by created_at desc limit 1`;
         const seleccion=cmd.cotizacionId??activa?.cotizacion_id??(todas.length===1?todas[0]!.id:null);
-        if(cmd.nuevaNegociacion && todas.length && !/\b(otra|otro|nueva|nuevo|segunda|segundo|distint[oa]|diferente|ahora|cambi[oa])\b/iu.test(String(origen.text)))
+        const activaActual=todas.find(x=>x.id===(activa?.cotizacion_id??(todas.length===1?todas[0]!.id:null)));
+        let proyectoNuevoAcreditado=false;
+        if(activaActual){
+          const [nuevoProyecto]=await sql`select id from message where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
+            and direction='in' and scope_kind='commercial' and created_at>${activaActual.created_at} and created_at<=${origen.created_at}
+            and text ~* '(proyecto[[:space:]]+nuevo|nuevo[[:space:]]+proyecto|otro[[:space:]]+proyecto)' and text !~* '(no[[:space:]]+(es[[:space:]]+)?(un[[:space:]]+)?(proyecto[[:space:]]+nuevo|nuevo[[:space:]]+proyecto|otro[[:space:]]+proyecto))' order by created_at desc limit 1`;
+          if(nuevoProyecto){cmd.nuevaNegociacion=true;proyectoNuevoAcreditado=true;}
+        }
+
+        if(cmd.nuevaNegociacion && todas.length && !proyectoNuevoAcreditado && !/\b(otra|otro|nueva|nuevo|segunda|segundo|distint[oa]|diferente|ahora|cambi[oa])\b/iu.test(String(origen.text)))
           throw new ComercialError('nueva_intencion_no_acreditada',422);
         if(!cmd.nuevaNegociacion && todas.length){
           q=todas.find(x=>x.id===seleccion);
@@ -213,9 +227,13 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
           const permiso=await consentimiento(sql,actor.organizationId,quoteId,cmd.version);
           if(permiso.registrado)return {...await estadoCotizacion(sql,actor.organizationId,q),consentimiento:permiso};
           if (cmd.mensajeAvisoId) {
+            const [origenVinculado]=await sql`select cotizacion_id from comercial_evento where organization_id=${actor.organizationId} and action='preparar'
+              and data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and data->>'versionCreada' is not null order by created_at desc limit 1`;
+            if(origenVinculado && origenVinculado.cotizacion_id!==quoteId)throw new ComercialError('consentimiento_de_otra_negociacion',422);
+
             const [m] = await sql`select text,created_at from message where organization_id=${actor.organizationId}
               and conversation_id=${cmd.conversationId} and id=${cmd.mensajeAvisoId} and direction='in'
-              and scope_kind='commercial' and created_at>=${v!.created_at} and created_at<=clock_timestamp()`;
+              and scope_kind='commercial' and created_at<=clock_timestamp() and (created_at>=${v!.created_at} or exists(select 1 from comercial_evento origen where origen.organization_id=${actor.organizationId} and origen.cotizacion_id=${quoteId} and origen.action='preparar' and origen.data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and origen.data->>'versionCreada'=${String(cmd.version)}))`;
             const completa=m&&autorizacionAvisoCompleta(String(m.text));
             if(!completa){
               const [pregunta]=m?await sql`select e.id from comercial_evento e where e.organization_id=${actor.organizationId} and e.cotizacion_id=${quoteId}
@@ -225,7 +243,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
               const [salida]=m?await sql`select text from message where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
                 and scope_kind='commercial' and direction='out' and created_at>=${v!.created_at} and created_at<=${m.created_at} order by created_at desc limit 1`:[];
               if(!m||!pregunta||!respuestaAviso(String(m.text))||
-                !/\baviso\b.*(?:cotizaci[oó]n|propuesta).*(?:autorizada|aprobada)/iu.test(String(salida?.text??'')))throw new ComercialError('consentimiento_no_acreditado',422);
+                !/(?=.*(?:avis|mensaje))(?=.*(?:cotizaci[oó]n|propuesta|autoriza|aprueb))/iu.test(String(salida?.text??'')))throw new ComercialError('consentimiento_no_acreditado',422);
             }
           }else if(permiso.preguntaPendiente)return await estadoCotizacion(sql,actor.organizationId,q);
           if(cmd.mensajeAvisoId) await sql`update comercial_evento set data=data||'{"estado":"pendiente","motivo":null}'::jsonb where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='aviso_aprobacion' and data->>'version'=${String(cmd.version)} and data->>'estado'='bloqueado' and data->>'motivo'='consentimiento_no_acreditado' and data->>'jobId' is null`;
@@ -262,7 +280,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
     }
     // Motivos de aprobación y referencias de evidencia permanecen internos.
     await sql`insert into comercial_evento(id,organization_id,cotizacion_id,actor,action,data)
-      values(${randomUUID()},${actor.organizationId},${quoteId},${who},${cmd.action},${JSON.stringify(cmd)}::text::jsonb)`;
+      values(${randomUUID()},${actor.organizationId},${quoteId},${who},${cmd.action},${JSON.stringify(cmd.action==='preparar'?{...cmd,versionCreada:result.version}:cmd)}::text::jsonb)`;
     await sql`insert into comercial_reintento(organization_id,actor,key,hash,result) values(${actor.organizationId},${who},${cmd.requestKey},${hash},${JSON.stringify(result)}::text::jsonb)`;
     return result;
   });

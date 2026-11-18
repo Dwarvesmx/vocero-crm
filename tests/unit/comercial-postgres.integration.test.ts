@@ -76,6 +76,21 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await expect(call(owner,{action:"decidir",conversationId:"conv",cotizacionId:q.cotizacionId,version:1,decision:"aprobar",motivo:"Prueba"})).rejects.toMatchObject({code:"importe_pendiente"});
     const leida=await comercialLeer(bot,"conv",q.cotizacionId);expect(leida.cotizaciones[0]!.id).toBe(q.cotizacionId);
   });
+  it("Nuevo proyecto anunciado en un turno informativo no revisa la propuesta anterior; consentimiento del origen",async()=>{
+    const anterior=await preparar();
+    const marker=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${marker},${owner.organizationId},'conv','in','Quiero consultar un proyecto nuevo, diferente de los anteriores. Por ahora solo información.')`;
+    expect(await comercialLeer(bot,'conv')).toMatchObject({negociacionActiva:null,nuevoProyectoPendiente:true});
+    const origen=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${origen},${owner.organizationId},'conv','in','Prepara una cotización. También autorizo que me avises por este WhatsApp cuando esté aprobada. ¿El precio es definitivo?')`;
+    const cmd=comandoSchema.parse({action:'preparar',requestKey:randomUUID(),conversationId:'conv',mensajeOrigenId:origen,cotizacionId:anterior.cotizacionId,version:1,actualizarAlcance:true,propuesta:{conceptos:[{productoId:'estandar',cantidad:1}],especial:'Revisión necesaria'}});
+    const [a,b]=await Promise.all([comercialEjecutar(bot,structuredClone(cmd)),comercialEjecutar(bot,structuredClone(cmd))]);
+    expect(a.cotizacionId).not.toBe(anterior.cotizacionId);expect(a.cotizacionId).toBe(b.cotizacionId);expect(a.version).toBe(1);
+    expect((await comercialLeer(bot,'conv',anterior.cotizacionId)).cotizaciones[0]!.version).toBe(1);
+    const ref={conversationId:'conv',cotizacionId:a.cotizacionId,version:1};
+    await expect(call(bot,{action:'solicitar_aprobacion',conversationId:'conv',cotizacionId:anterior.cotizacionId,version:1,mensajeAvisoId:origen})).rejects.toMatchObject({code:'consentimiento_de_otra_negociacion'});
+    await call(bot,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:origen});
+    expect((await comercialLeer(bot,'conv',String(a.cotizacionId))).cotizaciones[0]!.consentimiento).toMatchObject({registrado:true});
+    await expect(call(bot,{action:'solicitar_aprobacion',conversationId:'conv',cotizacionId:anterior.cotizacionId,version:1,mensajeAvisoId:marker})).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
+  });
   it("A. precio aprobado y reintento concurrente sin duplicación ni cambio de payload",async()=>{
     const origen=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${origen},${owner.organizationId},'conv','in','Quiero otra cotización para un proyecto nuevo')`;
     const cmd = comandoSchema.parse({action:"preparar",conversationId:"conv",mensajeOrigenId:origen,nuevaNegociacion:true,requestKey:randomUUID(),propuesta:{conceptos:[{productoId:"estandar",cantidad:1}]}});

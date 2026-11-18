@@ -3,6 +3,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {navegarComercial,navegacionInicial} from './navegacion-comercial';
+import { previsualizarCatalogo } from "@/server/comercial/catalogo-preview";
 import { PropuestaEditor } from './propuesta-editor';
 import {mxnACentavos,centavosAMxn} from '@/lib/mxn';
 import { urlDeConversacion } from "@/lib/avisos-sistema";
@@ -19,6 +20,8 @@ export function ComercialPanel() {
   const [navegacion,navegar] = useReducer(navegarComercial,navegacionInicial);
   const [mensaje,setMensaje] = useState(""); const [busy,setBusy] = useState(false);
   const [editor,setEditor] = useState<Producto | null>(null);
+  const [previaCatalogo,setPreviaCatalogo] = useState<Producto[] | null>(null);
+  const [confirmarCatalogo,setConfirmarCatalogo] = useState(false);
   const [detalle,setDetalle] = useState<Datos | null>(null);
   const [contactos,setContactos] = useState<Record<string,string>>({});
   const [creacionVersion,setCreacionVersion] = useState(0);
@@ -59,6 +62,16 @@ export function ComercialPanel() {
     <p role="status" className="text-sm">{mensaje}</p>
     {vista === "Catálogo y extras" && <>
       <div className="flex flex-wrap gap-2"><Button className="min-h-11" disabled={busy} onClick={()=>enviar({action:"sembrar"})}>Cargar catálogo V3</Button><Button variant="outline" onClick={()=>setEditor({id:"",nombre:"",descripcion:"",tipo:"producto",caracteristicas:[],exclusiones:[],unico:null,mensual:0,precioEstado:"pendiente",limites:{},compatibles:[],activo:true,condiciones:""})}>Nuevo concepto</Button></div>
+      <div className="space-y-2 rounded-md border p-3">
+        <Button variant="outline" disabled={busy} onClick={()=>{setPreviaCatalogo(structuredClone(datos.productos));setConfirmarCatalogo(false);}}>Revisar actualización del catálogo</Button>
+        {previaCatalogo && <div className="space-y-3">
+          <p>Vista previa: se aplican solo los campos que coinciden con la versión anterior. Los conflictos se conservan.</p>
+          <Button variant="outline" onClick={()=>{const blob=new Blob([JSON.stringify(previaCatalogo,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='catalogo-antes.json';a.click();URL.revokeObjectURL(url);}}>Descargar valores anteriores</Button>
+          {previsualizarCatalogo(previaCatalogo).map(item=><details key={item.id} className="rounded border p-2"><summary>{item.id}: {item.estado}</summary><pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify(item,null,2)}</pre></details>)}
+          <label className="flex gap-2"><input type="checkbox" checked={confirmarCatalogo} onChange={e=>setConfirmarCatalogo(e.target.checked)}/>Confirmo aplicar los cambios propuestos después de revisar la vista previa.</label>
+          <Button disabled={busy||!confirmarCatalogo} onClick={async()=>{if(await enviar({action:'conciliar_catalogo',esperado:previaCatalogo,confirmar:true})){setPreviaCatalogo(null);setConfirmarCatalogo(false);}}}>Aplicar cambios revisados</Button>
+        </div>}
+      </div>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Concepto</th><th>Único MXN</th><th>Mensual MXN</th><th>Precio</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{datos.productos.map(p=><tr className="border-b" key={p.id}><td className="p-2">{p.nombre}<small className="block">{p.tipo}</small></td><td>{dinero(p.unico)}</td><td>{dinero(p.mensual)}</td><td>{p.precioEstado}</td><td>{p.activo?"Activo":"Inactivo"}</td><td><Button variant="outline" onClick={()=>setEditor(p)}>Editar {p.id}</Button></td></tr>)}</tbody></table></div>
       {editor && <CatalogoEditor key={editor.id} producto={editor} busy={busy} cerrar={()=>setEditor(null)} guardar={async producto=>{if(await enviar({action:"catalogo",producto}))setEditor(null);}} />}
     </>}

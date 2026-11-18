@@ -46,13 +46,17 @@
   {
     "id": "web",
     "nombre": "Página web",
-    "descripcion": "Una sola página informativa, con **hasta cinco secciones** de presentación, productos/servicios, historia, datos/horarios y sección complementaria; contacto por WhatsApp, diseño adaptable a celular y computadora. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo por un periodo inicial propuesto de **12 meses**, con renovación informada por separado. **Estado:** la quinta sección requiere ajuste técnico menor antes de ofrecer disponibilidad inmediata. No incluye tienda, múltiples páginas, posicionamiento garantizado ni mantenimiento ilimitado. Las secciones fuera del paquete y las funcionalidades nuevas se cotizan aparte.",
+    "descripcion": "Página informativa adaptable para presentar un negocio y facilitar el contacto.",
     "tipo": "producto",
     "caracteristicas": [
-      "Una sola página informativa, con **hasta cinco secciones** de presentación, productos/servicios, historia, datos/horarios y sección complementaria; contacto por WhatsApp, diseño adaptable a celular y computadora. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo por un periodo inicial propuesto de **12 meses**, con renovación informada por separado. **Estado:** la quinta sección requiere ajuste técnico menor antes de ofrecer disponibilidad inmediata. No incluye tienda, múltiples páginas, posicionamiento garantizado ni mantenimiento ilimitado. Las secciones fuera del paquete y las funcionalidades nuevas se cotizan aparte."
+      "Una página informativa adaptable a celular y computadora.",
+      "Hasta cinco secciones; la quinta requiere ajuste técnico antes de prometer disponibilidad inmediata.",
+      "Contacto por WhatsApp.",
+      "Dominio básico propio y hosting básico durante los primeros 12 meses."
     ],
     "exclusiones": [
-      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+      "No incluye tienda en línea, múltiples páginas, posicionamiento garantizado ni mantenimiento ilimitado.",
+      "Secciones fuera del paquete y nuevas funcionalidades se cotizan aparte."
     ],
     "unico": 149900,
     "mensual": 0,
@@ -63,18 +67,22 @@
     },
     "compatibles": [],
     "activo": true,
-    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+    "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado."
   },
   {
     "id": "catalogo",
     "nombre": "Catálogo de productos",
-    "descripcion": "Presentación de **hasta 15 productos** con foto principal, descripción, precio, categorías, búsqueda y consulta por WhatsApp. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. No contiene carrito ni pagos, ni administra existencias automáticamente. Se pueden agregar bloques de productos o categorías y, cuando se necesita venta completa, proponer tienda en línea como servicio distinto.",
+    "descripcion": "Catálogo digital para presentar productos y facilitar consultas.",
     "tipo": "producto",
     "caracteristicas": [
-      "Presentación de **hasta 15 productos** con foto principal, descripción, precio, categorías, búsqueda y consulta por WhatsApp. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. No contiene carrito ni pagos, ni administra existencias automáticamente. Se pueden agregar bloques de productos o categorías y, cuando se necesita venta completa, proponer tienda en línea como servicio distinto."
+      "Hasta 15 productos con foto principal, descripción y precio.",
+      "Categorías y búsqueda.",
+      "Consulta por WhatsApp.",
+      "Dominio básico propio y hosting básico durante los primeros 12 meses."
     ],
     "exclusiones": [
-      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+      "No incluye carrito, cobros en línea ni inventario automático.",
+      "Productos o categorías adicionales y tienda en línea se cotizan aparte."
     ],
     "unico": 249000,
     "mensual": 0,
@@ -84,18 +92,21 @@
     },
     "compatibles": [],
     "activo": true,
-    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+    "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado."
   },
   {
     "id": "citas",
     "nombre": "Servicios y solicitudes de citas",
-    "descripcion": "Presentación de **hasta seis servicios**, horarios informativos, descripción, precio o duración aportados por el negocio y solicitud de cita por WhatsApp. El establecimiento **confirma manualmente** la cita. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. Para permitir que el cliente vea horarios libres y reserve directamente, se ofrece una **ampliación de reservas en línea** sujeta a configuración y tarifa.",
+    "descripcion": "Página para presentar servicios y recibir solicitudes de citas.",
     "tipo": "producto",
     "caracteristicas": [
-      "Presentación de **hasta seis servicios**, horarios informativos, descripción, precio o duración aportados por el negocio y solicitud de cita por WhatsApp. El establecimiento **confirma manualmente** la cita. Se propone incluir dominio básico propio y hosting básico; confirmar aprobación y condiciones antes de contratar. Periodo inicial propuesto de 12 meses. Para permitir que el cliente vea horarios libres y reserve directamente, se ofrece una **ampliación de reservas en línea** sujeta a configuración y tarifa."
+      "Hasta seis servicios con descripción y precio o duración aportados por el negocio.",
+      "Horarios informativos y solicitudes de citas por WhatsApp.",
+      "La confirmación de cada cita la realiza manualmente el establecimiento.",
+      "Dominio básico propio y hosting básico durante los primeros 12 meses."
     ],
     "exclusiones": [
-      "Solo lo expresamente incluido; las ampliaciones requieren cotización."
+      "Las reservas automáticas con disponibilidad se cotizan aparte y requieren configuración y tarifa autorizada."
     ],
     "unico": 249000,
     "mensual": 0,
@@ -105,7 +116,7 @@
     },
     "compatibles": [],
     "activo": true,
-    "condiciones": "V3: precio desde, no final. Costos, alcance, disponibilidad y periodo requieren confirmación administrativa antes de contratar. Renovación de dominio/hosting informada aparte; periodo inicial propuesto de 12 meses."
+    "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado."
   },
   {
     "id": "crm",
@@ -496,10 +507,10 @@
   {
     "id": "extra-12",
     "nombre": "Dominio + hosting web/catálogo/citas primer periodo",
-    "descripcion": "Incluidos 12 meses propuestos, sujeto a verificación costo real; no doble cobro",
+    "descripcion": "Dominio y hosting incluidos en el primer periodo de web, catálogo y citas; no se cobran nuevamente.",
     "tipo": "extra",
     "caracteristicas": [
-      "Incluidos 12 meses propuestos, sujeto a verificación costo real; no doble cobro"
+      "Dominio básico propio y hosting básico por 12 meses."
     ],
     "exclusiones": [
       "No incluye funciones ni consumos no descritos."
@@ -514,7 +525,7 @@
       "citas"
     ],
     "activo": true,
-    "condiciones": "Incluidos 12 meses propuestos, sujeto a verificación costo real; no doble cobro Estado V3: INCLUIDO. Requiere aprobación. Referencia MXN: 0."
+    "condiciones": "Prestación incluida en web, catálogo y citas; no agregar como cargo. Renovaciones y alcance adicional se cotizan por separado."
   },
   {
     "id": "extra-13",
@@ -1106,5 +1117,100 @@
     ],
     "activo": true,
     "condiciones": "Licencias/permisos/consumos y aislamiento separados Estado V3: PERSONALIZADO. Requiere aprobación."
+  },
+  {
+    "id": "dominio-com-independiente",
+    "nombre": "Registro de dominio .com estándar",
+    "descripcion": "Registro de dominio .com estándar, sujeto a disponibilidad y cotización.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Registro de dominio .com estándar, sujeto a disponibilidad y cotización."
+    ],
+    "exclusiones": [
+      "Sin servicios adicionales no especificados."
+    ],
+    "unico": null,
+    "mensual": null,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "Servicio independiente sujeto a alcance, disponibilidad y aprobación administrativa de precio y condiciones."
+  },
+  {
+    "id": "hosting-basico-independiente",
+    "nombre": "Hosting básico independiente",
+    "descripcion": "Hosting básico independiente sujeto a alcance y cotización.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Hosting básico independiente sujeto a alcance y cotización."
+    ],
+    "exclusiones": [
+      "Sin servicios adicionales no especificados."
+    ],
+    "unico": null,
+    "mensual": null,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "Servicio independiente sujeto a alcance, disponibilidad y aprobación administrativa de precio y condiciones."
+  },
+  {
+    "id": "dominio-hosting-independiente",
+    "nombre": "Dominio .com y hosting básico",
+    "descripcion": "Registro .com estándar y hosting básico, sujetos a disponibilidad y cotización.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Registro .com estándar y hosting básico, sujetos a disponibilidad y cotización."
+    ],
+    "exclusiones": [
+      "Sin servicios adicionales no especificados."
+    ],
+    "unico": null,
+    "mensual": null,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "Servicio independiente sujeto a alcance, disponibilidad y aprobación administrativa de precio y condiciones."
+  },
+  {
+    "id": "renovacion-dominio-independiente",
+    "nombre": "Renovación de dominio",
+    "descripcion": "Renovación de dominio para un periodo posterior; condiciones y precio por cotizar.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Renovación de dominio para un periodo posterior; condiciones y precio por cotizar."
+    ],
+    "exclusiones": [
+      "Sin servicios adicionales no especificados."
+    ],
+    "unico": null,
+    "mensual": null,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "Servicio independiente sujeto a alcance, disponibilidad y aprobación administrativa de precio y condiciones."
+  },
+  {
+    "id": "renovacion-hosting-independiente",
+    "nombre": "Renovación de hosting",
+    "descripcion": "Renovación de hosting para un periodo posterior; condiciones y precio por cotizar.",
+    "tipo": "producto",
+    "caracteristicas": [
+      "Renovación de hosting para un periodo posterior; condiciones y precio por cotizar."
+    ],
+    "exclusiones": [
+      "Sin servicios adicionales no especificados."
+    ],
+    "unico": null,
+    "mensual": null,
+    "precioEstado": "pendiente",
+    "limites": {},
+    "compatibles": [],
+    "activo": true,
+    "condiciones": "Servicio independiente sujeto a alcance, disponibilidad y aprobación administrativa de precio y condiciones."
   }
 ]

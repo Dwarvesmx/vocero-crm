@@ -2,9 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import type { TransactionSql } from "postgres";
 import { getSql } from "@/lib/db";
 import { calcular, ComercialError, comandoSchema, enlaceSeguro, exigirAdmin, productoSchema,
-  type Actor, type Comando, type Snapshot } from "./contracts";
+  type Actor, type Comando, type Producto, type Snapshot } from "./contracts";
 import { respuestaAviso, autorizacionAvisoCompleta } from "./consentimiento";
 import semilla from "./catalogo-v3.json";
+import cambiosConciliacion from "./catalogo-conciliacion-v3.json";
+import { previsualizarCatalogo } from "./catalogo-preview";
 
 export const comercialEnabled = () => process.env.COMERCIAL_V1_ENABLED === "true";
 function habilitado() { if (!comercialEnabled()) throw new ComercialError("no_disponible",404); }
@@ -107,6 +109,30 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
         await sql`insert into comercial_catalogo(organization_id,id,data) values(${actor.organizationId},${p.id},${JSON.stringify(p)}::text::jsonb) on conflict(organization_id,id) do nothing`;
       }
       result = { sembrado: true };
+    } else if (cmd.action === "conciliar_catalogo") {
+      exigirAdmin(actor);
+      const actual = await catalogo(sql,actor.organizationId);
+      if (JSON.stringify(actual) !== JSON.stringify(cmd.esperado)) throw new ComercialError("catalogo_modificado",409);
+      const vista=previsualizarCatalogo(actual);
+      const resultados: {id:string;antes:Producto|null;despues:Producto}[]=[];
+      for(const cambio of cambiosConciliacion){
+        const estado=vista.find(x=>x.id===cambio.id);
+        const anterior=actual.find(x=>x.id===cambio.id);
+        if ("nuevo" in cambio && cambio.nuevo && estado?.estado==='nuevo') {
+          const siguiente=productoSchema.parse(cambio.nuevo);
+          await sql`insert into comercial_catalogo(organization_id,id,data) values(${actor.organizationId},${siguiente.id},${JSON.stringify(siguiente)}::text::jsonb)`;
+          resultados.push({id:siguiente.id,antes:null,despues:siguiente});
+        } else if (anterior && 'campos' in estado! && estado.campos) {
+          const siguiente:Record<string,unknown>={...anterior};
+          for(const campo of estado.campos) if(campo.estado==='propuesto') siguiente[campo.campo]=campo.despues;
+          if(JSON.stringify(siguiente)!==JSON.stringify(anterior)){
+            const validado=productoSchema.parse(siguiente);
+            await sql`update comercial_catalogo set data=${JSON.stringify(validado)}::text::jsonb,updated_at=now() where organization_id=${actor.organizationId} and id=${validado.id}`;
+            resultados.push({id:validado.id,antes:anterior,despues:validado});
+          }
+        }
+      }
+      result={cambios:resultados,vista};
     } else if (cmd.action === "catalogo") {
       exigirAdmin(actor);
       await sql`insert into comercial_catalogo(organization_id,id,data) values(${actor.organizationId},${cmd.producto.id},${JSON.stringify(cmd.producto)}::text::jsonb)

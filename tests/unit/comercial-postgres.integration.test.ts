@@ -7,6 +7,8 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import semilla from "@/server/comercial/catalogo-v3.json";
+import cambios from "@/server/comercial/catalogo-conciliacion-v3.json";
 import { getDb, getSql } from "@/lib/db";
 import { comercialEjecutar, comercialLeer } from "@/server/comercial/service";
 import { comandoSchema, type Actor, type Comando, type Producto, type Snapshot } from "@/server/comercial/contracts";
@@ -43,6 +45,31 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await call(owner,{action:"catalogo",producto:{...producto,id:"extra",tipo:"extra",unico:29000,compatibles:["estandar"]}});
   });
   afterAll(async()=>{await sql?.end();});
+  it("Conciliación conserva ediciones, rechaza concurrencia y es idempotente",async()=>{
+    const entrada=structuredClone(semilla.find(x=>x.id==='web')!);
+    const cambio=cambios.find(x=>x.id==='web')!;
+    if(!('campos' in cambio) || !cambio.campos) throw Error('sin cambios');
+    for(const [k,v] of Object.entries(cambio.campos)) (entrada as unknown as Record<string,unknown>)[k]=v.antes;
+    entrada.nombre='Nombre modificado por administrador';
+    await call(owner,{action:'catalogo',producto:entrada});
+    const esperado=(await comercialLeer(owner)).productos;
+    const actualizado={...entrada,nombre:'Edición concurrente'};
+    await call(owner,{action:'catalogo',producto:actualizado});
+    await expect(call(owner,{action:'conciliar_catalogo',esperado,confirmar:true})).rejects.toMatchObject({code:'catalogo_modificado'});
+    const fresco=(await comercialLeer(owner)).productos;
+    const resultado=await call(owner,{action:'conciliar_catalogo',esperado:fresco,confirmar:true});
+    expect((resultado.cambios as {id:string}[]).some(x=>x.id==='web')).toBe(true);
+    const final=(await comercialLeer(owner)).productos;
+    expect(final.find(x=>x.id==='web')?.nombre).toBe('Edición concurrente');
+    const repetido=await call(owner,{action:'conciliar_catalogo',esperado:final,confirmar:true});
+    expect(repetido.cambios).toEqual([]);
+  });
+  it("Solicitud fuera de catálogo queda pendiente y no permite aprobación",async()=>{
+    const q=await preparar({conceptos:[],pendientes:[{descripcion:"Solución personalizada",solicitud:"Evaluar alcance solicitado"}]});
+    expect(q.estado).toBe("pendiente"); expect(q.snapshot.unico).toBeNull();
+    await expect(call(owner,{action:"decidir",conversationId:"conv",cotizacionId:q.cotizacionId,version:1,decision:"aprobar",motivo:"Prueba"})).rejects.toMatchObject({code:"importe_pendiente"});
+    const leida=await comercialLeer(bot,"conv",q.cotizacionId);expect(leida.cotizaciones[0]!.id).toBe(q.cotizacionId);
+  });
   it("A. precio aprobado y reintento concurrente sin duplicación ni cambio de payload",async()=>{
     const origen=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${origen},${owner.organizationId},'conv','in','Quiero otra cotización para un proyecto nuevo')`;
     const cmd = comandoSchema.parse({action:"preparar",conversationId:"conv",mensajeOrigenId:origen,nuevaNegociacion:true,requestKey:randomUUID(),propuesta:{conceptos:[{productoId:"estandar",cantidad:1}]}});
@@ -158,7 +185,7 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     try{
       const address=server.address();if(!address||typeof address==='string')throw Error('Puerto local ausente');
       await new Promise<void>((yes,no)=>{
-        const child=spawn(resolve('../tmp/nea-test-venv/Scripts/python.exe'),['tests/comercial_asesor_modelo_real.py',`http://127.0.0.1:${address.port}`,process.env.COMERCIAL_REAL_MODEL??'google/gemini-3-flash-preview',process.env.COMERCIAL_REAL_CASES??''],{cwd:resolve('../nea-comercial-v1'),windowsHide:true,env:{...process.env,PYTHONPATH:resolve('../nea-comercial-v1')}});
+        const child=spawn(resolve('../tmp/nea-test-venv/Scripts/python.exe'),['tests/comercial_asesor_modelo_real.py',`http://127.0.0.1:${address.port}`,process.env.COMERCIAL_REAL_MODEL??'google/gemini-3-flash-preview',process.env.COMERCIAL_REAL_CASES??''],{cwd:resolve(process.env.NEA_COMERCIAL_PATH??'../nea-comercial-v1'),windowsHide:true,env:{...process.env,PYTHONPATH:resolve(process.env.NEA_COMERCIAL_PATH??'../nea-comercial-v1')}});
         let error='';child.stdout.on('data',c=>process.stdout.write(c));child.stderr.on('data',c=>error+=c);child.on('error',no);child.on('exit',code=>code===0?yes():no(Error(error.slice(-7000))));
       });
     }finally{await new Promise<void>((yes,no)=>server.close(e=>e?no(e):yes()));}

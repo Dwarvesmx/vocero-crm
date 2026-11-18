@@ -22,16 +22,19 @@ export const pendienteSchema = z.object({descripcion:texto,solicitud:texto,
 });
 export const propuestaSchema = z.object({
   conceptos: z.array(z.object({ productoId: id, cantidad: z.number().int().min(1).max(1000),
-    baseId: id.optional() }).strict()).min(1).max(40),
+    baseId: id.optional(), cobertura: z.enum(["adicional", "superior", "renovacion"]).optional(), inicioMes: z.number().int().min(1).max(1200).optional() }).strict()).max(40),
   condiciones: texto.optional(), especial: texto.optional(),
   pendientes:z.array(pendienteSchema).max(40).optional(),
   promocion:z.object({nombre:texto,descuento:dinero,condiciones:texto.optional()}).strict().optional(),
   // Solo admin. Su presencia invalida la autorización automática.
   importeUnico: dinero.optional(), importeMensual: dinero.optional(),
-}).strict();
+}).strict().superRefine((p,ctx)=>{
+  if (!p.conceptos.length && !(p.pendientes?.length)) ctx.addIssue({code:'custom',message:'Agrega un concepto o una solicitud pendiente'});
+});
 export type Propuesta = z.infer<typeof propuestaSchema>;
 export const comandoSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("sembrar"), requestKey: id }).strict(),
+  z.object({ action: z.literal("conciliar_catalogo"), requestKey: id, esperado: z.array(productoSchema).max(1000), confirmar: z.literal(true) }).strict(),
   z.object({ action: z.literal("catalogo"), requestKey: id, producto: productoSchema }).strict(),
   z.object({ action: z.literal("preparar"), requestKey: id, conversationId: id, propuesta: propuestaSchema, mensajeOrigenId: id.optional(), cotizacionId: id.optional(), nuevaNegociacion: z.boolean().optional(), actualizarAlcance: z.boolean().optional(), version:z.number().int().positive().optional() }).strict(),
   z.object({ action: z.literal("revisar"), requestKey: id, conversationId: id, cotizacionId: id, version: z.number().int().positive(), propuesta: propuestaSchema }).strict(),
@@ -64,6 +67,13 @@ export function calcular(propuesta: Propuesta, catalogo: Producto[]) {
   const conceptos = propuesta.conceptos.map(linea => {
     const p = catalogo.find(p => p.id === linea.productoId && p.activo);
     if (!p) throw new ComercialError("producto_no_disponible", 422);
+    const paquetes = propuesta.conceptos.some(c=>["web","catalogo","citas"].includes(c.productoId));
+    if (paquetes && (p.id !== "extra-13" || ["web","catalogo","citas"].includes(linea.baseId ?? "")) && ["dominio-com-independiente","hosting-basico-independiente","dominio-hosting-independiente","renovacion-dominio-independiente","renovacion-hosting-independiente","extra-13"].includes(p.id)) {
+      const ampliacion = p.id === "dominio-com-independiente" ? linea.cobertura === "adicional" : p.id === "hosting-basico-independiente" ? linea.cobertura === "superior" : false;
+      const renovacion = linea.cobertura === "renovacion" && (linea.inicioMes ?? 0) >= 13;
+      if (!ampliacion && !renovacion) throw new ComercialError("alcance_o_periodo_no_acreditado",422);
+    }
+    if (p.id === "extra-12" && linea.baseId && ["web", "catalogo", "citas"].includes(linea.baseId)) throw new ComercialError("prestacion_ya_incluida", 422);
     if (p.tipo === "extra") {
       const base = propuesta.conceptos.find(c => c.productoId === linea.baseId);
       const productoBase = catalogo.find(p => p.id === base?.productoId);
@@ -93,7 +103,7 @@ export function calcular(propuesta: Propuesta, catalogo: Producto[]) {
     condiciones: propuesta.condiciones ?? "Aplican las condiciones de cada concepto del catálogo adjunto.",
     especial: propuesta.especial ?? null,
     requiereAprobacion: !!propuesta.promocion || pendientes.length>0 || !!propuesta.especial || propuesta.importeUnico !== undefined || propuesta.importeMensual !== undefined ||
-      unico === null || mensual === null || conceptos.some(c => c.producto.precioEstado !== "aprobado"),
+      unico === null || mensual === null || conceptos.some(c => !!c.cobertura || c.producto.precioEstado !== "aprobado"),
   };
 }
 export type Snapshot = ReturnType<typeof calcular>;

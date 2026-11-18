@@ -41,7 +41,15 @@ try{
   if(count.n!==45||sentinel.name!=="Registro previo sintético")throw Error("Migración no conserva base");
   console.log("Migración base 0000–0043 → 0044 comercial aplicada dos veces; migrador anterior compatible; journal 45, fila previa conservada.");
  }finally{await sql.end();}
- if(!process.argv.includes("--ui-only")){
+ if(process.argv.includes("--circuit")){
+  ejecutar(process.execPath,["node_modules/vitest/vitest.mjs","run","tests/unit/lukas-circuito.integration.test.ts"],{...local,
+   NEA_COMERCIAL_PATH:process.env.NEA_COMERCIAL_PATH??"../nea-catalogo-consolidado",
+   APP_BASE_URL:"http://127.0.0.1:55548",ZERNIO_BASE_URL:"http://127.0.0.1:55548/provider",
+   BRAIN_DISPATCH_URL:"http://127.0.0.1:55549/vocero/dispatch",ZERNIO_WHATSAPP_ENABLED:"true",
+   ZERNIO_NEA_DISPATCH_ENABLED:"true",ZERNIO_NEA_RESPONSE_ID_ENABLED:"true",ZERNIO_NEA_AUTO_ENABLED:"true",
+   CIRCUITO_PYTHON:resolve(process.env.CIRCUITO_PYTHON??"../tmp/nea-test-venv/Scripts/python.exe"),
+   CIRCUITO_REPORT:resolve(process.env.CIRCUITO_REPORT??"../tmp/evidencia-lukas-circuito.json")});
+ } else if(!process.argv.includes("--ui-only")){
   ejecutar(process.execPath,["node_modules/vitest/vitest.mjs","run","tests/unit/comercial-postgres.integration.test.ts","tests/unit/nav.test.ts"],local);
   ejecutar(process.execPath,["node_modules/typescript/bin/tsc","--noEmit"],local);
   ejecutar(process.execPath,["node_modules/eslint/bin/eslint.js","src/server/comercial","src/components/comercial","src/app/api/comercial","src/app/api/bot/comercial","src/app/(app)/comercial","tests/unit/comercial-postgres.integration.test.ts"],local);

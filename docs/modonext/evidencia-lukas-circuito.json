@@ -1,0 +1,924 @@
+{
+  "estado": "LISTO",
+  "fecha": "2026-11-18T12:09:55.446Z",
+  "fuentes": {
+    "vocero": "42d30caf2391c49d9a890d84f0149d33ce29b5db",
+    "nea": "358af3bd8b140a35e8a6b8c9e1f491cd2f5669fb"
+  },
+  "entorno": "PostgreSQL 16 local descartable, datos sintéticos",
+  "simulaciones": [
+    "Respuestas HTTP OpenRouter",
+    "Aceptación HTTP y ACK firmado de Zernio"
+  ],
+  "calls": [
+    {
+      "method": "GET",
+      "tool": "comercial_catalogo",
+      "action": "consultar",
+      "status": 401,
+      "code": "unauthorized",
+      "result": {}
+    },
+    {
+      "method": "GET",
+      "tool": "comercial_catalogo",
+      "action": "consultar",
+      "status": 200,
+      "result": {}
+    },
+    {
+      "method": "POST",
+      "tool": "messages",
+      "action": "responder",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "messageId": "msg_lhdjgtdejveyezomz6te"
+      },
+      "command": {
+        "conversationId": "conv-circuito",
+        "text": "Para una lavandería ofrecemos Servicios y Citas: muestra servicios y precios y permite solicitudes de cita. Puedes consultar el alcance y las condiciones antes de decidir. Por ahora seguimos solo con información.",
+        "dispatchId": "dsp_g4mlhwa4f9dzlt3x4dc1",
+        "responseId": "aea4eed5-3eb9-493c-805c-6b644715baa4"
+      }
+    },
+    {
+      "method": "GET",
+      "tool": "comercial_catalogo",
+      "action": "consultar",
+      "status": 200,
+      "result": {}
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_preparar",
+      "action": "preparar",
+      "requestKey": "798ae2cc198a88c91b63b89ec955020c677c0150e6a10d5ec921bad538e72f7c",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "estado": "pendiente",
+        "consentimiento": {
+          "registrado": false,
+          "preguntaPendiente": false
+        }
+      },
+      "command": {
+        "action": "preparar",
+        "conversationId": "conv-circuito",
+        "requestKey": "798ae2cc198a88c91b63b89ec955020c677c0150e6a10d5ec921bad538e72f7c",
+        "propuesta": {
+          "conceptos": [
+            {
+              "productoId": "citas",
+              "cantidad": 1
+            }
+          ],
+          "especial": "Lavandería: servicios, precios y solicitudes de cita dentro del paquete base"
+        },
+        "mensajeOrigenId": "msg_mrc0fsrc4hbdcz836mjs"
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_preparar",
+      "action": "preparar",
+      "requestKey": "96aa9984105423ee12c81db81b1ffcdb0b7bb58af1da907459807fedcf48bf47",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "estado": "pendiente",
+        "consentimiento": {
+          "registrado": false,
+          "preguntaPendiente": false
+        }
+      },
+      "command": {
+        "action": "preparar",
+        "conversationId": "conv-circuito",
+        "requestKey": "96aa9984105423ee12c81db81b1ffcdb0b7bb58af1da907459807fedcf48bf47",
+        "propuesta": {
+          "conceptos": [
+            {
+              "productoId": "citas",
+              "cantidad": 1
+            }
+          ]
+        },
+        "mensajeOrigenId": "msg_mrc0fsrc4hbdcz836mjs",
+        "nuevaNegociacion": true
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_solicitar_aprobacion",
+      "action": "solicitar_aprobacion",
+      "requestKey": "e9ed7da17ab03d5f91b5a0cf1ec699824413d1d089cdfb43b4efbeeecc408573",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "estado": "pendiente",
+        "consentimiento": {
+          "registrado": true,
+          "preguntaPendiente": false
+        }
+      },
+      "command": {
+        "action": "solicitar_aprobacion",
+        "conversationId": "conv-circuito",
+        "requestKey": "e9ed7da17ab03d5f91b5a0cf1ec699824413d1d089cdfb43b4efbeeecc408573",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "mensajeAvisoId": "msg_mrc0fsrc4hbdcz836mjs"
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "messages",
+      "action": "responder",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "messageId": "msg_ob8s80jgbo5zjnpm4cr4"
+      },
+      "command": {
+        "conversationId": "conv-circuito",
+        "text": "Servicios y Citas cubre tu lavandería: servicios, precios y solicitudes de cita en la misma propuesta. El precio orientativo es $2,490 MXN y requiere aprobación administrativa. Tu autorización de aviso quedó registrada. Para contratar, primero se aprueba esta propuesta y después aceptas las condiciones; el pago queda pendiente.",
+        "dispatchId": "dsp_h8m2vjh7l74a30twsfw5",
+        "responseId": "ad092062-9c42-4eb7-8141-b811fb5a617a"
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_solicitar_aprobacion",
+      "action": "solicitar_aprobacion",
+      "requestKey": "e9ed7da17ab03d5f91b5a0cf1ec699824413d1d089cdfb43b4efbeeecc408573",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "estado": "pendiente",
+        "consentimiento": {
+          "registrado": true,
+          "preguntaPendiente": false
+        }
+      },
+      "command": {
+        "action": "solicitar_aprobacion",
+        "conversationId": "conv-circuito",
+        "requestKey": "e9ed7da17ab03d5f91b5a0cf1ec699824413d1d089cdfb43b4efbeeecc408573",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "mensajeAvisoId": "msg_mrc0fsrc4hbdcz836mjs"
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_preparar",
+      "action": "preparar",
+      "requestKey": "798ae2cc198a88c91b63b89ec955020c677c0150e6a10d5ec921bad538e72f7c",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "estado": "pendiente",
+        "consentimiento": {
+          "registrado": true,
+          "preguntaPendiente": false
+        }
+      },
+      "command": {
+        "action": "preparar",
+        "conversationId": "conv-circuito",
+        "requestKey": "798ae2cc198a88c91b63b89ec955020c677c0150e6a10d5ec921bad538e72f7c",
+        "propuesta": {
+          "conceptos": [
+            {
+              "productoId": "citas",
+              "cantidad": 1
+            }
+          ],
+          "especial": "Lavandería: servicios, precios y solicitudes de cita dentro del paquete base"
+        },
+        "mensajeOrigenId": "msg_mrc0fsrc4hbdcz836mjs"
+      }
+    },
+    {
+      "method": "GET",
+      "tool": "comercial_catalogo",
+      "action": "consultar",
+      "status": 200,
+      "result": {}
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_aceptar",
+      "action": "aceptar",
+      "requestKey": "6382691e699b8b7c0c40c9d850cd13a716344d93f86d715b32d95fa090a9efa2",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "estado": "aceptada"
+      },
+      "command": {
+        "action": "aceptar",
+        "conversationId": "conv-circuito",
+        "requestKey": "6382691e699b8b7c0c40c9d850cd13a716344d93f86d715b32d95fa090a9efa2",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1,
+        "mensajeId": "msg_1vwph08yxvrsjy3b0pr9"
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "comercial_contratar",
+      "action": "contratar",
+      "requestKey": "bac28ad7dea909df90588559cc61615ba7569de048f528fa70e58f37939324f9",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "pedido": {
+          "id": "c9874c8d-4d4c-4ce3-a7b4-3a7cbe60ea78",
+          "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+          "version": 1,
+          "estado": "pendiente",
+          "enlace": null
+        }
+      },
+      "command": {
+        "action": "contratar",
+        "conversationId": "conv-circuito",
+        "requestKey": "bac28ad7dea909df90588559cc61615ba7569de048f528fa70e58f37939324f9",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "version": 1
+      }
+    },
+    {
+      "method": "POST",
+      "tool": "messages",
+      "action": "responder",
+      "conversationId": "conv-circuito",
+      "status": 200,
+      "result": {
+        "messageId": "msg_r1tlpizciyegxa7gc0uk"
+      },
+      "command": {
+        "conversationId": "conv-circuito",
+        "text": "Tu pedido quedó registrado con pago pendiente. La contratación corresponde a la propuesta aprobada que aceptaste por este chat. No hay pago confirmado ni enlace de cobro disponible todavía.",
+        "dispatchId": "dsp_axytp7dttte3qooiqnk5",
+        "responseId": "acfb1c84-f20e-4866-bd09-675efbc38ffd"
+      }
+    }
+  ],
+  "sends": [
+    {
+      "requestKey": "nea:aea4eed5-3eb9-493c-805c-6b644715baa4",
+      "id": "wamid-salida-1",
+      "attempts": 1
+    },
+    {
+      "requestKey": "nea:ad092062-9c42-4eb7-8141-b811fb5a617a",
+      "id": "wamid-salida-2",
+      "attempts": 1
+    },
+    {
+      "requestKey": "comercial-aviso:eb5633ee-884c-41fb-a664-3ce421cc1ef9:1:cliente-circuito",
+      "id": "wamid-salida-3",
+      "attempts": 1
+    },
+    {
+      "requestKey": "nea:acfb1c84-f20e-4866-bd09-675efbc38ffd",
+      "id": "wamid-salida-4",
+      "attempts": 1
+    }
+  ],
+  "checks": [
+    {
+      "transicion": "informacion",
+      "respuesta": "Para una lavandería ofrecemos Servicios y Citas: muestra servicios y precios y permite solicitudes de cita. Puedes consultar el alcance y las condiciones antes de decidir. Por ahora seguimos solo con información.",
+      "estado": "sent"
+    },
+    {
+      "transicion": "informacion",
+      "cotizacionesNuevas": 0,
+      "consentimientos": 0
+    },
+    {
+      "transicion": "reintento_despacho",
+      "dispatchId": "dsp_h8m2vjh7l74a30twsfw5",
+      "status": "entregado",
+      "attempts": 2
+    },
+    {
+      "transicion": "cotizacion",
+      "respuesta": "Servicios y Citas cubre tu lavandería: servicios, precios y solicitudes de cita en la misma propuesta. El precio orientativo es $2,490 MXN y requiere aprobación administrativa. Tu autorización de aviso quedó registrada. Para contratar, primero se aprueba esta propuesta y después aceptas las condiciones; el pago queda pendiente.",
+      "estado": "sent"
+    },
+    {
+      "transicion": "cotizacion",
+      "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "version": 1,
+      "consentimiento": {
+        "registrado": true,
+        "preguntaPendiente": false
+      },
+      "snapshot": {
+        "unico": 249000,
+        "moneda": "MXN",
+        "mensual": 0,
+        "especial": "Lavandería: servicios, precios y solicitudes de cita dentro del paquete base",
+        "conceptos": [
+          {
+            "cantidad": 1,
+            "producto": {
+              "id": "citas",
+              "tipo": "producto",
+              "unico": 249000,
+              "activo": true,
+              "nombre": "Servicios y solicitudes de citas",
+              "limites": {
+                "servicios": 6
+              },
+              "mensual": 0,
+              "compatibles": [],
+              "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado.",
+              "descripcion": "Página para presentar servicios y recibir solicitudes de citas.",
+              "exclusiones": [
+                "Las reservas automáticas con disponibilidad se cotizan aparte y requieren configuración y tarifa autorizada."
+              ],
+              "precioEstado": "orientativo",
+              "caracteristicas": [
+                "Hasta seis servicios con descripción y precio o duración aportados por el negocio.",
+                "Horarios informativos y solicitudes de citas por WhatsApp.",
+                "La confirmación de cada cita la realiza manualmente el establecimiento.",
+                "Dominio básico propio y hosting básico durante los primeros 12 meses."
+              ]
+            },
+            "productoId": "citas"
+          }
+        ],
+        "promocion": null,
+        "pendientes": [],
+        "ajusteUnico": 0,
+        "condiciones": "Aplican las condiciones de cada concepto del catálogo adjunto.",
+        "ajusteMensual": 0,
+        "subtotalUnico": 249000,
+        "subtotalMensual": 0,
+        "requiereAprobacion": true,
+        "conocidoDespuesDescuento": 249000
+      }
+    },
+    {
+      "transicion": "aceptacion_proveedor",
+      "estado": "sent",
+      "entregaConfirmada": false
+    },
+    {
+      "transicion": "aprobacion_outbox_ack",
+      "approval": [
+        {
+          "action": "decidir",
+          "data": {
+            "action": "decidir",
+            "motivo": "Alcance sintético incluido en paquete cotejado",
+            "version": 1,
+            "decision": "aprobar",
+            "requestKey": "71edf512-a7e0-409a-b2b8-c044a220b0aa",
+            "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+            "conversationId": "conv-circuito"
+          }
+        },
+        {
+          "action": "aviso_aprobacion",
+          "data": {
+            "jobId": "2d0ce30f-afde-45ad-835a-d6834a13084e",
+            "estado": "encolado",
+            "motivo": null,
+            "version": 1,
+            "contactId": "cliente-circuito",
+            "messageId": "1558234c-487f-4d9f-9bed-1b91acfc6e23",
+            "conversationId": "conv-circuito"
+          }
+        }
+      ],
+      "jobs": [
+        {
+          "id": "2d0ce30f-afde-45ad-835a-d6834a13084e",
+          "organization_id": "org_kkwfsosssnqtloj58jnk",
+          "conversation_id": "conv-circuito",
+          "message_id": "1558234c-487f-4d9f-9bed-1b91acfc6e23",
+          "account_ref": "cuenta-circuito",
+          "thread_ref": "hilo-circuito",
+          "request_key": "comercial-aviso:eb5633ee-884c-41fb-a664-3ce421cc1ef9:1:cliente-circuito",
+          "status": "pendiente",
+          "attempts": 0,
+          "not_before": "2026-11-18 12:10:02.800728",
+          "leased_until": null,
+          "created_at": "2026-11-18 12:10:02.800728",
+          "updated_at": "2026-11-18 12:10:02.800728",
+          "handoff_reason": null,
+          "source_dispatch_id": null,
+          "commercial_route_generation": null
+        }
+      ],
+      "estadoFinal": "delivered"
+    },
+    {
+      "transicion": "contratacion",
+      "respuesta": "Tu pedido quedó registrado con pago pendiente. La contratación corresponde a la propuesta aprobada que aceptaste por este chat. No hay pago confirmado ni enlace de cobro disponible todavía.",
+      "estado": "sent"
+    }
+  ],
+  "proyectosAnteriores": [
+    "d5fe3fa1-4488-4aa8-b9eb-ed789516c401",
+    "cdcfa215-57c4-4671-924a-77cc6694bd2a"
+  ],
+  "organizationId": "org_kkwfsosssnqtloj58jnk",
+  "conversationId": "conv-circuito",
+  "cotizaciones": [
+    {
+      "id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "organization_id": "org_kkwfsosssnqtloj58jnk",
+      "conversation_id": "conv-circuito",
+      "contact_id": "cliente-circuito",
+      "version": 1,
+      "estado": "aceptada",
+      "aprobada_version": 1,
+      "accepted_message_id": "msg_1vwph08yxvrsjy3b0pr9",
+      "created_at": "2026-11-18 12:10:02.603478",
+      "snapshot": {
+        "unico": 249000,
+        "moneda": "MXN",
+        "mensual": 0,
+        "especial": "Lavandería: servicios, precios y solicitudes de cita dentro del paquete base",
+        "conceptos": [
+          {
+            "cantidad": 1,
+            "producto": {
+              "id": "citas",
+              "tipo": "producto",
+              "unico": 249000,
+              "activo": true,
+              "nombre": "Servicios y solicitudes de citas",
+              "limites": {
+                "servicios": 6
+              },
+              "mensual": 0,
+              "compatibles": [],
+              "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado.",
+              "descripcion": "Página para presentar servicios y recibir solicitudes de citas.",
+              "exclusiones": [
+                "Las reservas automáticas con disponibilidad se cotizan aparte y requieren configuración y tarifa autorizada."
+              ],
+              "precioEstado": "orientativo",
+              "caracteristicas": [
+                "Hasta seis servicios con descripción y precio o duración aportados por el negocio.",
+                "Horarios informativos y solicitudes de citas por WhatsApp.",
+                "La confirmación de cada cita la realiza manualmente el establecimiento.",
+                "Dominio básico propio y hosting básico durante los primeros 12 meses."
+              ]
+            },
+            "productoId": "citas"
+          }
+        ],
+        "promocion": null,
+        "pendientes": [],
+        "ajusteUnico": 0,
+        "condiciones": "Aplican las condiciones de cada concepto del catálogo adjunto.",
+        "ajusteMensual": 0,
+        "subtotalUnico": 249000,
+        "subtotalMensual": 0,
+        "requiereAprobacion": true,
+        "conocidoDespuesDescuento": 249000
+      },
+      "consentimiento": {
+        "registrado": true,
+        "preguntaPendiente": false
+      },
+      "preguntaAvisoActual": false
+    },
+    {
+      "id": "cdcfa215-57c4-4671-924a-77cc6694bd2a",
+      "organization_id": "org_kkwfsosssnqtloj58jnk",
+      "conversation_id": "conv-circuito",
+      "contact_id": "cliente-circuito",
+      "version": 1,
+      "estado": "pendiente",
+      "aprobada_version": null,
+      "accepted_message_id": null,
+      "created_at": "2026-11-18 12:09:56.039791",
+      "snapshot": {
+        "unico": 249000,
+        "moneda": "MXN",
+        "mensual": 0,
+        "especial": null,
+        "conceptos": [
+          {
+            "cantidad": 1,
+            "producto": {
+              "id": "catalogo",
+              "tipo": "producto",
+              "unico": 249000,
+              "activo": true,
+              "nombre": "Catálogo de productos",
+              "limites": {
+                "productos": 15
+              },
+              "mensual": 0,
+              "compatibles": [],
+              "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado.",
+              "descripcion": "Catálogo digital para presentar productos y facilitar consultas.",
+              "exclusiones": [
+                "No incluye carrito, cobros en línea ni inventario automático.",
+                "Productos o categorías adicionales y tienda en línea se cotizan aparte."
+              ],
+              "precioEstado": "orientativo",
+              "caracteristicas": [
+                "Hasta 15 productos con foto principal, descripción y precio.",
+                "Categorías y búsqueda.",
+                "Consulta por WhatsApp.",
+                "Dominio básico propio y hosting básico durante los primeros 12 meses."
+              ]
+            },
+            "productoId": "catalogo"
+          }
+        ],
+        "promocion": null,
+        "pendientes": [],
+        "ajusteUnico": 0,
+        "condiciones": "Aplican las condiciones de cada concepto del catálogo adjunto.",
+        "ajusteMensual": 0,
+        "subtotalUnico": 249000,
+        "subtotalMensual": 0,
+        "requiereAprobacion": true,
+        "conocidoDespuesDescuento": 249000
+      },
+      "consentimiento": {
+        "registrado": false,
+        "preguntaPendiente": false
+      },
+      "preguntaAvisoActual": false
+    },
+    {
+      "id": "d5fe3fa1-4488-4aa8-b9eb-ed789516c401",
+      "organization_id": "org_kkwfsosssnqtloj58jnk",
+      "conversation_id": "conv-circuito",
+      "contact_id": "cliente-circuito",
+      "version": 1,
+      "estado": "pendiente",
+      "aprobada_version": null,
+      "accepted_message_id": null,
+      "created_at": "2026-11-18 12:09:56.00995",
+      "snapshot": {
+        "unico": 149900,
+        "moneda": "MXN",
+        "mensual": 0,
+        "especial": null,
+        "conceptos": [
+          {
+            "cantidad": 1,
+            "producto": {
+              "id": "web",
+              "tipo": "producto",
+              "unico": 149900,
+              "activo": true,
+              "nombre": "Página web",
+              "limites": {
+                "paginas": 1,
+                "secciones": 5
+              },
+              "mensual": 0,
+              "compatibles": [],
+              "condiciones": "Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado.",
+              "descripcion": "Página informativa adaptable para presentar un negocio y facilitar el contacto.",
+              "exclusiones": [
+                "No incluye tienda en línea, múltiples páginas, posicionamiento garantizado ni mantenimiento ilimitado.",
+                "Secciones fuera del paquete y nuevas funcionalidades se cotizan aparte."
+              ],
+              "precioEstado": "orientativo",
+              "caracteristicas": [
+                "Una página informativa adaptable a celular y computadora.",
+                "Hasta cinco secciones; la quinta requiere ajuste técnico antes de prometer disponibilidad inmediata.",
+                "Contacto por WhatsApp.",
+                "Dominio básico propio y hosting básico durante los primeros 12 meses."
+              ]
+            },
+            "productoId": "web"
+          }
+        ],
+        "promocion": null,
+        "pendientes": [],
+        "ajusteUnico": 0,
+        "condiciones": "Aplican las condiciones de cada concepto del catálogo adjunto.",
+        "ajusteMensual": 0,
+        "subtotalUnico": 149900,
+        "subtotalMensual": 0,
+        "requiereAprobacion": true,
+        "conocidoDespuesDescuento": 149900
+      },
+      "consentimiento": {
+        "registrado": false,
+        "preguntaPendiente": false
+      },
+      "preguntaAvisoActual": false
+    }
+  ],
+  "consentimientos": [
+    {
+      "id": "2be36799-bc91-49ac-839c-3a7c8f7c6287",
+      "organization_id": "org_kkwfsosssnqtloj58jnk",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "actor": "bot:conv-circuito",
+      "action": "solicitar_aprobacion",
+      "data": {
+        "action": "solicitar_aprobacion",
+        "version": 1,
+        "requestKey": "e9ed7da17ab03d5f91b5a0cf1ec699824413d1d089cdfb43b4efbeeecc408573",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "conversationId": "conv-circuito",
+        "mensajeAvisoId": "msg_mrc0fsrc4hbdcz836mjs"
+      },
+      "created_at": "2026-11-18 12:10:02.650472"
+    }
+  ],
+  "pedidos": [
+    {
+      "id": "c9874c8d-4d4c-4ce3-a7b4-3a7cbe60ea78",
+      "organization_id": "org_kkwfsosssnqtloj58jnk",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "version": 1,
+      "estado": "pendiente",
+      "enlace": null,
+      "evidencia": null,
+      "created_at": "2026-11-18 12:10:02.973725"
+    }
+  ],
+  "mensajes": [
+    {
+      "id": "origen-anterior-web",
+      "direction": "in",
+      "text": "Quiero cotizar otro proyecto nuevo anterior sintético",
+      "status": "pending",
+      "wa_message_id": null
+    },
+    {
+      "id": "origen-anterior-catalogo",
+      "direction": "in",
+      "text": "Quiero cotizar otro proyecto nuevo anterior sintético",
+      "status": "pending",
+      "wa_message_id": null
+    },
+    {
+      "id": "msg_t5a6r9hgyag8ivmqq4yi",
+      "direction": "in",
+      "text": "Quiero información para un proyecto nuevo de lavandería. No quiero cotización.",
+      "status": "delivered",
+      "wa_message_id": "wamid-info"
+    },
+    {
+      "id": "msg_lhdjgtdejveyezomz6te",
+      "direction": "out",
+      "text": "Para una lavandería ofrecemos Servicios y Citas: muestra servicios y precios y permite solicitudes de cita. Puedes consultar el alcance y las condiciones antes de decidir. Por ahora seguimos solo con información.",
+      "status": "sent",
+      "wa_message_id": "wamid-salida-1"
+    },
+    {
+      "id": "msg_mrc0fsrc4hbdcz836mjs",
+      "direction": "in",
+      "text": "Quiero una cotización para mi lavandería con servicios, precios y solicitudes de cita. Autorizo que me avises por este WhatsApp cuando esté aprobada. ¿Cuánto cuesta y cómo contrato?",
+      "status": "delivered",
+      "wa_message_id": "wamid-cotizar"
+    },
+    {
+      "id": "msg_ob8s80jgbo5zjnpm4cr4",
+      "direction": "out",
+      "text": "Servicios y Citas cubre tu lavandería: servicios, precios y solicitudes de cita en la misma propuesta. El precio orientativo es $2,490 MXN y requiere aprobación administrativa. Tu autorización de aviso quedó registrada. Para contratar, primero se aprueba esta propuesta y después aceptas las condiciones; el pago queda pendiente.",
+      "status": "sent",
+      "wa_message_id": "wamid-salida-2"
+    },
+    {
+      "id": "1558234c-487f-4d9f-9bed-1b91acfc6e23",
+      "direction": "out",
+      "text": "Tu cotización eb5633ee-884c-41fb-a664-3ce421cc1ef9, versión 1, fue aprobada. 1 × Servicios y solicitudes de citas: Hasta seis servicios con descripción y precio o duración aportados por el negocio.; Horarios informativos y solicitudes de citas por WhatsApp.; La confirmación de cada cita la realiza manualmente el establecimiento.; Dominio básico propio y hosting básico durante los primeros 12 meses.. Excluye: Las reservas automáticas con disponibilidad se cotizan aparte y requieren configuración y tarifa autorizada.. Precio desde, no final; requiere autorización. Incluye dominio básico propio y hosting básico por 12 meses. Renovación posterior cotizada por separado.\nAlcance aprobado: Lavandería: servicios, precios y solicitudes de cita dentro del paquete base\n. Pago único: $2,490.00; mensual: $0.00. Aplican las condiciones de cada concepto del catálogo adjunto. Lukas puede continuar contigo: ¿aceptas esta propuesta? La aprobación no confirma contratación ni pago.",
+      "status": "delivered",
+      "wa_message_id": "wamid-salida-3"
+    },
+    {
+      "id": "msg_1vwph08yxvrsjy3b0pr9",
+      "direction": "in",
+      "text": "Sí, acepto explícitamente la propuesta aprobada de mi lavandería y quiero contratarla.",
+      "status": "delivered",
+      "wa_message_id": "wamid-aceptar"
+    },
+    {
+      "id": "msg_r1tlpizciyegxa7gc0uk",
+      "direction": "out",
+      "text": "Tu pedido quedó registrado con pago pendiente. La contratación corresponde a la propuesta aprobada que aceptaste por este chat. No hay pago confirmado ni enlace de cobro disponible todavía.",
+      "status": "sent",
+      "wa_message_id": "wamid-salida-4"
+    }
+  ],
+  "despachos": [
+    {
+      "id": "dsp_g4mlhwa4f9dzlt3x4dc1",
+      "status": "entregado",
+      "message_ids": [
+        "msg_t5a6r9hgyag8ivmqq4yi"
+      ],
+      "attempts": 1
+    },
+    {
+      "id": "dsp_h8m2vjh7l74a30twsfw5",
+      "status": "entregado",
+      "message_ids": [
+        "msg_mrc0fsrc4hbdcz836mjs"
+      ],
+      "attempts": 2
+    },
+    {
+      "id": "dsp_axytp7dttte3qooiqnk5",
+      "status": "entregado",
+      "message_ids": [
+        "msg_1vwph08yxvrsjy3b0pr9"
+      ],
+      "attempts": 1
+    }
+  ],
+  "nea": [
+    {
+      "dispatch_id": "dsp_g4mlhwa4f9dzlt3x4dc1",
+      "state": "done"
+    },
+    {
+      "dispatch_id": "dsp_h8m2vjh7l74a30twsfw5",
+      "state": "done"
+    },
+    {
+      "dispatch_id": "dsp_axytp7dttte3qooiqnk5",
+      "state": "done"
+    }
+  ],
+  "outbox": [
+    {
+      "id": "dsp_8y654ur6f2kvmuqyndw4",
+      "message_id": "msg_lhdjgtdejveyezomz6te",
+      "request_key": "nea:aea4eed5-3eb9-493c-805c-6b644715baa4",
+      "status": "completado",
+      "attempts": 1
+    },
+    {
+      "id": "dsp_tla4iqhadwfccpci6uj2",
+      "message_id": "msg_ob8s80jgbo5zjnpm4cr4",
+      "request_key": "nea:ad092062-9c42-4eb7-8141-b811fb5a617a",
+      "status": "completado",
+      "attempts": 1
+    },
+    {
+      "id": "2d0ce30f-afde-45ad-835a-d6834a13084e",
+      "message_id": "1558234c-487f-4d9f-9bed-1b91acfc6e23",
+      "request_key": "comercial-aviso:eb5633ee-884c-41fb-a664-3ce421cc1ef9:1:cliente-circuito",
+      "status": "completado",
+      "attempts": 1
+    },
+    {
+      "id": "dsp_1lwmmjsfiqs9hwizjd1x",
+      "message_id": "msg_r1tlpizciyegxa7gc0uk",
+      "request_key": "nea:acfb1c84-f20e-4866-bd09-675efbc38ffd",
+      "status": "completado",
+      "attempts": 1
+    }
+  ],
+  "eventos": [
+    {
+      "id": "39046a96-9f07-4eac-af2b-6bd85fe551c3",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "action": "preparar",
+      "data": {
+        "action": "preparar",
+        "propuesta": {
+          "especial": "Lavandería: servicios, precios y solicitudes de cita dentro del paquete base",
+          "conceptos": [
+            {
+              "cantidad": 1,
+              "productoId": "citas"
+            }
+          ]
+        },
+        "requestKey": "798ae2cc198a88c91b63b89ec955020c677c0150e6a10d5ec921bad538e72f7c",
+        "versionCreada": 1,
+        "conversationId": "conv-circuito",
+        "mensajeOrigenId": "msg_mrc0fsrc4hbdcz836mjs",
+        "nuevaNegociacion": true
+      }
+    },
+    {
+      "id": "2be36799-bc91-49ac-839c-3a7c8f7c6287",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "action": "solicitar_aprobacion",
+      "data": {
+        "action": "solicitar_aprobacion",
+        "version": 1,
+        "requestKey": "e9ed7da17ab03d5f91b5a0cf1ec699824413d1d089cdfb43b4efbeeecc408573",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "conversationId": "conv-circuito",
+        "mensajeAvisoId": "msg_mrc0fsrc4hbdcz836mjs"
+      }
+    },
+    {
+      "id": "bca954c4-13dd-4776-b6d2-ef2cb65eddc1",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "action": "decidir",
+      "data": {
+        "action": "decidir",
+        "motivo": "Alcance sintético incluido en paquete cotejado",
+        "version": 1,
+        "decision": "aprobar",
+        "requestKey": "71edf512-a7e0-409a-b2b8-c044a220b0aa",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "conversationId": "conv-circuito"
+      }
+    },
+    {
+      "id": "0f0dea67-6a5a-4957-a918-b75f02d91887",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "action": "aviso_aprobacion",
+      "data": {
+        "jobId": "2d0ce30f-afde-45ad-835a-d6834a13084e",
+        "estado": "encolado",
+        "motivo": null,
+        "version": 1,
+        "contactId": "cliente-circuito",
+        "messageId": "1558234c-487f-4d9f-9bed-1b91acfc6e23",
+        "conversationId": "conv-circuito"
+      }
+    },
+    {
+      "id": "dbaf5d41-f6e3-4704-b7a7-5520d560928b",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "action": "aceptar",
+      "data": {
+        "action": "aceptar",
+        "version": 1,
+        "mensajeId": "msg_1vwph08yxvrsjy3b0pr9",
+        "requestKey": "6382691e699b8b7c0c40c9d850cd13a716344d93f86d715b32d95fa090a9efa2",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "conversationId": "conv-circuito"
+      }
+    },
+    {
+      "id": "17877a0c-d6b7-4945-973f-5d33697c7bbd",
+      "cotizacion_id": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+      "action": "contratar",
+      "data": {
+        "action": "contratar",
+        "version": 1,
+        "requestKey": "bac28ad7dea909df90588559cc61615ba7569de048f528fa70e58f37939324f9",
+        "cotizacionId": "eb5633ee-884c-41fb-a664-3ce421cc1ef9",
+        "conversationId": "conv-circuito"
+      }
+    }
+  ],
+  "webhooks": [
+    {
+      "id": "703ca596-647b-4995-bdc7-403d46da4b74",
+      "status": "procesado",
+      "attempts": 1,
+      "provider_event": "info"
+    },
+    {
+      "id": "c758d476-ddcc-4f09-ac3b-f40625557702",
+      "status": "procesado",
+      "attempts": 1,
+      "provider_event": "cotizar"
+    },
+    {
+      "id": "whe_b78noy3p1wggkxpehtpj",
+      "status": "procesado",
+      "attempts": 1,
+      "provider_event": "ack"
+    },
+    {
+      "id": "950aab22-c837-4b8d-b480-4df1d0349476",
+      "status": "procesado",
+      "attempts": 1,
+      "provider_event": "aceptar"
+    }
+  ],
+  "duplicados": {
+    "cotizacionesNuevas": 1,
+    "consentimientos": 1,
+    "pedidos": 1,
+    "avisos": 1,
+    "detectados": 0
+  }
+}

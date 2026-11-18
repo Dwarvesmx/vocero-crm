@@ -2,10 +2,14 @@
   {
     "id": "tarjeta",
     "nombre": "Tarjeta digital",
-    "descripcion": "Un perfil profesional o de negocio para compartir datos: nombre, foto o logotipo aportado, breve descripción, teléfono, WhatsApp, correo cuando corresponda, **hasta dos enlaces sociales** y opción para guardar contacto. Adaptable al celular; se propone enlace en subdominio ModoNext y alojamiento básico, sujetos a aprobación de costos y periodo antes de contratar. **Estado:** la segunda red social está decidida comercialmente, pero todavía requiere ajuste técnico antes de prometer entrega inmediata. No incluye nuevo logotipo, panel administrativo ni dominio propio. Se puede ampliar con dominio, QR, idiomas y perfiles adicionales, previa cotización.",
+    "descripcion": "Un perfil profesional o de negocio para compartir datos: nombre, foto o logotipo aportado, breve descripción, teléfono, WhatsApp, correo cuando corresponda, **hasta dos enlaces sociales** y opción para guardar contacto.",
     "tipo": "producto",
     "caracteristicas": [
-      "Un perfil profesional o de negocio para compartir datos: nombre, foto o logotipo aportado, breve descripción, teléfono, WhatsApp, correo cuando corresponda, **hasta dos enlaces sociales** y opción para guardar contacto. Adaptable al celular; se propone enlace en subdominio ModoNext y alojamiento básico, sujetos a aprobación de costos y periodo antes de contratar. **Estado:** la segunda red social está decidida comercialmente, pero todavía requiere ajuste técnico antes de prometer entrega inmediata. No incluye nuevo logotipo, panel administrativo ni dominio propio. Se puede ampliar con dominio, QR, idiomas y perfiles adicionales, previa cotización."
+      "Un perfil profesional o de negocio para compartir datos: nombre, foto o logotipo aportado, breve descripción, teléfono, WhatsApp, correo cuando corresponda, **hasta dos enlaces sociales** y opción para guardar contacto.",
+      "Adaptable al celular; se propone enlace en subdominio ModoNext y alojamiento básico, sujetos a aprobación de costos y periodo antes de contratar.",
+      "**Estado:** la segunda red social está decidida comercialmente, pero todavía requiere ajuste técnico antes de prometer entrega inmediata.",
+      "No incluye nuevo logotipo, panel administrativo ni dominio propio.",
+      "Se puede ampliar con dominio, QR, idiomas y perfiles adicionales, previa cotización."
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -24,10 +28,13 @@
   {
     "id": "menu",
     "nombre": "Menú digital",
-    "descripcion": "Menú compartible, **hasta 20 platillos en cuatro categorías**, descripciones, precios y fotos aportadas, navegación cómoda desde celular y consulta por WhatsApp. Subdominio y alojamiento básico inicial: inclusión propuesta, pendiente de aprobación de costos y periodo; confirmar antes de contratar. **No es tienda en línea**: no confirma pedidos automáticamente ni cobra dentro del menú. Se pueden agregar productos, categorías, imágenes, QR y, como ampliación diferente, un proceso de pedidos o cobros.",
+    "descripcion": "Menú compartible, **hasta 20 platillos en cuatro categorías**, descripciones, precios y fotos aportadas, navegación cómoda desde celular y consulta por WhatsApp.",
     "tipo": "producto",
     "caracteristicas": [
-      "Menú compartible, **hasta 20 platillos en cuatro categorías**, descripciones, precios y fotos aportadas, navegación cómoda desde celular y consulta por WhatsApp. Subdominio y alojamiento básico inicial: inclusión propuesta, pendiente de aprobación de costos y periodo; confirmar antes de contratar. **No es tienda en línea**: no confirma pedidos automáticamente ni cobra dentro del menú. Se pueden agregar productos, categorías, imágenes, QR y, como ampliación diferente, un proceso de pedidos o cobros."
+      "Menú compartible, **hasta 20 platillos en cuatro categorías**, descripciones, precios y fotos aportadas, navegación cómoda desde celular y consulta por WhatsApp.",
+      "Subdominio y alojamiento básico inicial: inclusión propuesta, pendiente de aprobación de costos y periodo; confirmar antes de contratar.",
+      "**No es tienda en línea**: no confirma pedidos automáticamente ni cobra dentro del menú.",
+      "Se pueden agregar productos, categorías, imágenes, QR y, como ampliación diferente, un proceso de pedidos o cobros."
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -121,10 +128,13 @@
   {
     "id": "crm",
     "nombre": "Vocero CRM",
-    "descripcion": "Solución para organizar clientes, prospectos y oportunidades comerciales, dar seguimiento a interesados y trabajar con un embudo de ventas. La configuración, cantidad de usuarios, almacenamiento, soporte y disponibilidad se especifican al cotizar. No incluye automáticamente agente de WhatsApp ni integraciones nuevas. **Los precios y la disponibilidad para nuevos clientes están condicionados a validación técnica y operativa; no emitir un contrato cerrado sin autorización.**",
+    "descripcion": "Solución para organizar clientes, prospectos y oportunidades comerciales, dar seguimiento a interesados y trabajar con un embudo de ventas.",
     "tipo": "producto",
     "caracteristicas": [
-      "Solución para organizar clientes, prospectos y oportunidades comerciales, dar seguimiento a interesados y trabajar con un embudo de ventas. La configuración, cantidad de usuarios, almacenamiento, soporte y disponibilidad se especifican al cotizar. No incluye automáticamente agente de WhatsApp ni integraciones nuevas. **Los precios y la disponibilidad para nuevos clientes están condicionados a validación técnica y operativa; no emitir un contrato cerrado sin autorización.**"
+      "Solución para organizar clientes, prospectos y oportunidades comerciales, dar seguimiento a interesados y trabajar con un embudo de ventas.",
+      "La configuración, cantidad de usuarios, almacenamiento, soporte y disponibilidad se especifican al cotizar.",
+      "No incluye automáticamente agente de WhatsApp ni integraciones nuevas.",
+      "**Los precios y la disponibilidad para nuevos clientes están condicionados a validación técnica y operativa; no emitir un contrato cerrado sin autorización.**"
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -140,10 +150,13 @@
   {
     "id": "agente",
     "nombre": "Asistente inteligente para WhatsApp",
-    "descripcion": "Atiende consultas acerca del negocio, explica productos y servicios, orienta según información autorizada, identifica interesados y puede solicitar intervención humana cuando corresponda. El plan incluye **un nivel de consumo mensual y soporte definidos para cada propuesta**: no es ilimitado. No afirmar cupos concretos, automatizaciones de seguimiento, agendas conectadas ni inventario en tiempo real sin confirmación. **Precios, cupos y activación siguen sujetos a medición y autorización.**",
+    "descripcion": "Atiende consultas acerca del negocio, explica productos y servicios, orienta según información autorizada, identifica interesados y puede solicitar intervención humana cuando corresponda.",
     "tipo": "producto",
     "caracteristicas": [
-      "Atiende consultas acerca del negocio, explica productos y servicios, orienta según información autorizada, identifica interesados y puede solicitar intervención humana cuando corresponda. El plan incluye **un nivel de consumo mensual y soporte definidos para cada propuesta**: no es ilimitado. No afirmar cupos concretos, automatizaciones de seguimiento, agendas conectadas ni inventario en tiempo real sin confirmación. **Precios, cupos y activación siguen sujetos a medición y autorización.**"
+      "Atiende consultas acerca del negocio, explica productos y servicios, orienta según información autorizada, identifica interesados y puede solicitar intervención humana cuando corresponda.",
+      "El plan incluye **un nivel de consumo mensual y soporte definidos para cada propuesta**: no es ilimitado.",
+      "No afirmar cupos concretos, automatizaciones de seguimiento, agendas conectadas ni inventario en tiempo real sin confirmación.",
+      "**Precios, cupos y activación siguen sujetos a medición y autorización.**"
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -159,10 +172,12 @@
   {
     "id": "combinado",
     "nombre": "Vocero CRM + asistente WhatsApp",
-    "descripcion": "Integra organización y seguimiento comercial con atención inteligente; los servicios básicos de ambos se incluyen según contrato, aprovechando la implantación conjunta. Puede ofrecer mejor valor que contratarlos separadamente; **no declarar registro automático o sincronización completa hasta que la integración específica esté probada**, ni emitir cotización cerrada sin límites de uso, soporte y usuarios acordados. **Los importes están propuestos, no autorizados aún para contratación automática.**",
+    "descripcion": "Integra organización y seguimiento comercial con atención inteligente; los servicios básicos de ambos se incluyen según contrato, aprovechando la implantación conjunta.",
     "tipo": "producto",
     "caracteristicas": [
-      "Integra organización y seguimiento comercial con atención inteligente; los servicios básicos de ambos se incluyen según contrato, aprovechando la implantación conjunta. Puede ofrecer mejor valor que contratarlos separadamente; **no declarar registro automático o sincronización completa hasta que la integración específica esté probada**, ni emitir cotización cerrada sin límites de uso, soporte y usuarios acordados. **Los importes están propuestos, no autorizados aún para contratación automática.**"
+      "Integra organización y seguimiento comercial con atención inteligente; los servicios básicos de ambos se incluyen según contrato, aprovechando la implantación conjunta.",
+      "Puede ofrecer mejor valor que contratarlos separadamente; **no declarar registro automático o sincronización completa hasta que la integración específica esté probada**, ni emitir cotización cerrada sin límites de uso, soporte y usuarios acordados.",
+      "**Los importes están propuestos, no autorizados aún para contratación automática.**"
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -178,10 +193,11 @@
   {
     "id": "inmobiliaria",
     "nombre": "Inmobiliaria de Mérida",
-    "descripcion": "Hasta seis propiedades estáticas. Inventario en vivo, mapas avanzados y CRM son ampliaciones.",
+    "descripcion": "Hasta seis propiedades estáticas.",
     "tipo": "especializacion",
     "caracteristicas": [
-      "Hasta seis propiedades estáticas. Inventario en vivo, mapas avanzados y CRM son ampliaciones."
+      "Hasta seis propiedades estáticas.",
+      "Inventario en vivo, mapas avanzados y CRM son ampliaciones."
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -199,10 +215,11 @@
   {
     "id": "consultorio",
     "nombre": "Consultorio",
-    "descripcion": "Un profesional, hasta seis servicios, credenciales aportadas y verificadas. Sin historias clínicas ni reserva automática.",
+    "descripcion": "Un profesional, hasta seis servicios, credenciales aportadas y verificadas.",
     "tipo": "especializacion",
     "caracteristicas": [
-      "Un profesional, hasta seis servicios, credenciales aportadas y verificadas. Sin historias clínicas ni reserva automática."
+      "Un profesional, hasta seis servicios, credenciales aportadas y verificadas.",
+      "Sin historias clínicas ni reserva automática."
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -221,10 +238,11 @@
   {
     "id": "spa",
     "nombre": "Spa y estética",
-    "descripcion": "Presentación sectorial de servicios y solicitudes manuales de citas. Reservas con disponibilidad se cotizan aparte.",
+    "descripcion": "Presentación sectorial de servicios y solicitudes manuales de citas.",
     "tipo": "especializacion",
     "caracteristicas": [
-      "Presentación sectorial de servicios y solicitudes manuales de citas. Reservas con disponibilidad se cotizan aparte."
+      "Presentación sectorial de servicios y solicitudes manuales de citas.",
+      "Reservas con disponibilidad se cotizan aparte."
     ],
     "exclusiones": [
       "Solo lo expresamente incluido; las ampliaciones requieren cotización."
@@ -242,7 +260,7 @@
   {
     "id": "extra-01",
     "nombre": "Sección web adicional (a partir de sexta)",
-    "descripcion": "Contenido listo, bloque existente; quinta sección ya es parte del paquete",
+    "descripcion": "Sección web adicional (a partir de sexta).",
     "tipo": "extra",
     "caracteristicas": [
       "Contenido listo, bloque existente; quinta sección ya es parte del paquete"
@@ -263,7 +281,7 @@
   {
     "id": "extra-02",
     "nombre": "Página independiente adicional",
-    "descripcion": "No confundir con sección dentro de one-page",
+    "descripcion": "Página independiente adicional.",
     "tipo": "extra",
     "caracteristicas": [
       "No confundir con sección dentro de one-page"
@@ -284,7 +302,7 @@
   {
     "id": "extra-03",
     "nombre": "Redacción breve de sección",
-    "descripcion": "Material base del cliente; no copywriting integral",
+    "descripcion": "Redacción breve de sección.",
     "tipo": "extra",
     "caracteristicas": [
       "Material base del cliente; no copywriting integral"
@@ -305,7 +323,7 @@
   {
     "id": "extra-04",
     "nombre": "Preparación/optimización hasta 10 fotografías",
-    "descripcion": "Derechos del cliente; no generar imágenes nuevas sin consentimiento",
+    "descripcion": "Preparación/optimización hasta 10 fotografías.",
     "tipo": "extra",
     "caracteristicas": [
       "Derechos del cliente; no generar imágenes nuevas sin consentimiento"
@@ -336,7 +354,7 @@
   {
     "id": "extra-05",
     "nombre": "Diseño de logotipo o identidad visual",
-    "descripcion": "Servicio con diseñadora; presupuesto separado",
+    "descripcion": "Diseño de logotipo o identidad visual.",
     "tipo": "extra",
     "caracteristicas": [
       "Servicio con diseñadora; presupuesto separado"
@@ -367,7 +385,7 @@
   {
     "id": "extra-06",
     "nombre": "Segundo idioma",
-    "descripcion": "Traducción y actualización por cuenta",
+    "descripcion": "Segundo idioma.",
     "tipo": "extra",
     "caracteristicas": [
       "Traducción y actualización por cuenta"
@@ -398,7 +416,7 @@
   {
     "id": "extra-07",
     "nombre": "Hasta 10 productos adicionales",
-    "descripcion": "Texto, precios y foto principal listos; contar solo excedente",
+    "descripcion": "Hasta 10 productos adicionales.",
     "tipo": "extra",
     "caracteristicas": [
       "Texto, precios y foto principal listos; contar solo excedente"
@@ -420,7 +438,7 @@
   {
     "id": "extra-08",
     "nombre": "Hasta 20 productos adicionales",
-    "descripcion": "Carga preparada; no incluye fotografía ni inventario",
+    "descripcion": "Hasta 20 productos adicionales.",
     "tipo": "extra",
     "caracteristicas": [
       "Carga preparada; no incluye fotografía ni inventario"
@@ -442,7 +460,7 @@
   {
     "id": "extra-09",
     "nombre": "Categoría adicional",
-    "descripcion": "Si el modelo acepta categorías extra sin programar",
+    "descripcion": "Categoría adicional.",
     "tipo": "extra",
     "caracteristicas": [
       "Si el modelo acepta categorías extra sin programar"
@@ -464,7 +482,7 @@
   {
     "id": "extra-10",
     "nombre": "Tercer enlace social o posterior",
-    "descripcion": "Dos redes incluidas; segundo enlace aún requiere implementación",
+    "descripcion": "Tercer enlace social o posterior.",
     "tipo": "extra",
     "caracteristicas": [
       "Dos redes incluidas; segundo enlace aún requiere implementación"
@@ -485,7 +503,7 @@
   {
     "id": "extra-11",
     "nombre": "Dominio propio sencillo + hosting básico tarjeta/menú",
-    "descripcion": "Precio por año; subdominio incluido; verificar TLD, titularidad y renovación",
+    "descripcion": "Dominio propio sencillo + hosting básico tarjeta/menú.",
     "tipo": "extra",
     "caracteristicas": [
       "Precio por año; subdominio incluido; verificar TLD, titularidad y renovación"
@@ -530,7 +548,7 @@
   {
     "id": "extra-13",
     "nombre": "Renovación anual dominio y hosting",
-    "descripcion": "Informar antes del vencimiento; no se presupone igual en todos los casos",
+    "descripcion": "Renovación anual dominio y hosting.",
     "tipo": "extra",
     "caracteristicas": [
       "Informar antes del vencimiento; no se presupone igual en todos los casos"
@@ -561,7 +579,7 @@
   {
     "id": "extra-14",
     "nombre": "QR de URL publicada",
-    "descripcion": "URL definitiva comprobada; no incluye impresión física",
+    "descripcion": "QR de URL publicada.",
     "tipo": "extra",
     "caracteristicas": [
       "URL definitiva comprobada; no incluye impresión física"
@@ -583,7 +601,7 @@
   {
     "id": "extra-15",
     "nombre": "Formulario básico de contacto",
-    "descripcion": "Configuración estándar; evita backend propio; privacidad",
+    "descripcion": "Formulario básico de contacto.",
     "tipo": "extra",
     "caracteristicas": [
       "Configuración estándar; evita backend propio; privacidad"
@@ -605,7 +623,7 @@
   {
     "id": "extra-16",
     "nombre": "Formulario con registro y notificaciones",
-    "descripcion": "Plataforma adecuada; control de acceso y privacidad",
+    "descripcion": "Formulario con registro y notificaciones.",
     "tipo": "extra",
     "caracteristicas": [
       "Plataforma adecuada; control de acceso y privacidad"
@@ -627,7 +645,7 @@
   {
     "id": "extra-17",
     "nombre": "Formulario con reportes básicos",
-    "descripcion": "Hoja/resumen simple, no BI ni sistema de administración",
+    "descripcion": "Formulario con reportes básicos.",
     "tipo": "extra",
     "caracteristicas": [
       "Hoja/resumen simple, no BI ni sistema de administración"
@@ -649,7 +667,7 @@
   {
     "id": "extra-18",
     "nombre": "Formulario con lógica/datos sensibles",
-    "descripcion": "Seguridad, consentimiento y gestión conforme al dato",
+    "descripcion": "Formulario con lógica/datos sensibles.",
     "tipo": "extra",
     "caracteristicas": [
       "Seguridad, consentimiento y gestión conforme al dato"
@@ -680,7 +698,7 @@
   {
     "id": "extra-19",
     "nombre": "Enlace o botón de pago",
-    "descripcion": "Cuenta de cliente verificada; no confirma pedido automáticamente",
+    "descripcion": "Enlace o botón de pago.",
     "tipo": "extra",
     "caracteristicas": [
       "Cuenta de cliente verificada; no confirma pedido automáticamente"
@@ -711,7 +729,7 @@
   {
     "id": "extra-20",
     "nombre": "Plugin/checkout en tienda compatible",
-    "descripcion": "Tienda ya funcional y plugin vigente; requiere pruebas y comisiones",
+    "descripcion": "Plugin/checkout en tienda compatible.",
     "tipo": "extra",
     "caracteristicas": [
       "Tienda ya funcional y plugin vigente; requiere pruebas y comisiones"
@@ -732,7 +750,7 @@
   {
     "id": "extra-21",
     "nombre": "Facturación o conciliación automática",
-    "descripcion": "Proveedor, fiscalidad, API, seguridad, licencias",
+    "descripcion": "Facturación o conciliación automática.",
     "tipo": "extra",
     "caracteristicas": [
       "Proveedor, fiscalidad, API, seguridad, licencias"
@@ -753,7 +771,7 @@
   {
     "id": "extra-22",
     "nombre": "Tienda WooCommerce básica estandarizada",
-    "descripcion": "Máximo de catálogo a definir; diseño reutilizable; hosting y mantenimiento aparte",
+    "descripcion": "Tienda WooCommerce básica estandarizada.",
     "tipo": "extra",
     "caracteristicas": [
       "Máximo de catálogo a definir; diseño reutilizable; hosting y mantenimiento aparte"
@@ -774,7 +792,7 @@
   {
     "id": "extra-23",
     "nombre": "Tienda PrestaShop",
-    "descripcion": "Según módulos, producto/variantes y alojamiento; experiencia previa del equipo",
+    "descripcion": "Tienda PrestaShop.",
     "tipo": "extra",
     "caracteristicas": [
       "Según módulos, producto/variantes y alojamiento; experiencia previa del equipo"
@@ -795,7 +813,7 @@
   {
     "id": "extra-24",
     "nombre": "Carrito/gestión pedido avanzado",
-    "descripcion": "No confundir con enlace externo ni catálogo estático",
+    "descripcion": "Carrito/gestión pedido avanzado.",
     "tipo": "extra",
     "caracteristicas": [
       "No confundir con enlace externo ni catálogo estático"
@@ -816,7 +834,7 @@
   {
     "id": "extra-25",
     "nombre": "Reservas con disponibilidad un profesional",
-    "descripcion": "Plataforma compatible; cliente debe tener cuenta; suscripciones aparte",
+    "descripcion": "Reservas con disponibilidad un profesional.",
     "tipo": "extra",
     "caracteristicas": [
       "Plataforma compatible; cliente debe tener cuenta; suscripciones aparte"
@@ -837,7 +855,7 @@
   {
     "id": "extra-26",
     "nombre": "Reserva multi-profesional con plataforma existente",
-    "descripcion": "Plataforma que soporte recursos; cupos/plan aparte",
+    "descripcion": "Reserva multi-profesional con plataforma existente.",
     "tipo": "extra",
     "caracteristicas": [
       "Plataforma que soporte recursos; cupos/plan aparte"
@@ -858,7 +876,7 @@
   {
     "id": "extra-27",
     "nombre": "Recordatorios mediante servicio contratado",
-    "descripcion": "Depende del proveedor, plan, canal y mensajes",
+    "descripcion": "Recordatorios mediante servicio contratado.",
     "tipo": "extra",
     "caracteristicas": [
       "Depende del proveedor, plan, canal y mensajes"
@@ -879,7 +897,7 @@
   {
     "id": "extra-28",
     "nombre": "Agenda con reglas/operación personalizada",
-    "descripcion": "No construir hasta justificar necesidad",
+    "descripcion": "Agenda con reglas/operación personalizada.",
     "tipo": "extra",
     "caracteristicas": [
       "No construir hasta justificar necesidad"
@@ -900,7 +918,7 @@
   {
     "id": "extra-29",
     "nombre": "Automatización sencilla con servicio disponible",
-    "descripcion": "Una tarea definida, pruebas y límite de operaciones; suscripción aparte",
+    "descripcion": "Automatización sencilla con servicio disponible.",
     "tipo": "extra",
     "caracteristicas": [
       "Una tarea definida, pruebas y límite de operaciones; suscripción aparte"
@@ -931,7 +949,7 @@
   {
     "id": "extra-30",
     "nombre": "Propiedades adicionales",
-    "descripcion": "Seis fichas estáticas contempladas en variante inicial; precio según carga",
+    "descripcion": "Propiedades adicionales.",
     "tipo": "extra",
     "caracteristicas": [
       "Seis fichas estáticas contempladas en variante inicial; precio según carga"
@@ -952,7 +970,7 @@
   {
     "id": "extra-31",
     "nombre": "Inventario con panel y sincronización",
-    "descripcion": "Requiere reglas de actualización, permisos y soporte",
+    "descripcion": "Inventario con panel y sincronización.",
     "tipo": "extra",
     "caracteristicas": [
       "Requiere reglas de actualización, permisos y soporte"
@@ -973,7 +991,7 @@
   {
     "id": "extra-32",
     "nombre": "Mapas avanzados y filtros dinámicos",
-    "descripcion": "API geográfica, datos, geocodificación y mantenimiento",
+    "descripcion": "Mapas avanzados y filtros dinámicos.",
     "tipo": "extra",
     "caracteristicas": [
       "API geográfica, datos, geocodificación y mantenimiento"
@@ -994,7 +1012,7 @@
   {
     "id": "extra-33",
     "nombre": "Reservas conectadas para profesional",
-    "descripcion": "Sin expedientes ni datos clínicos sensibles",
+    "descripcion": "Reservas conectadas para profesional.",
     "tipo": "extra",
     "caracteristicas": [
       "Sin expedientes ni datos clínicos sensibles"
@@ -1016,7 +1034,7 @@
   {
     "id": "extra-34",
     "nombre": "Expediente clínico o gestión de pacientes",
-    "descripcion": "Datos sensibles, privacidad y controles reforzados",
+    "descripcion": "Expediente clínico o gestión de pacientes.",
     "tipo": "extra",
     "caracteristicas": [
       "Datos sensibles, privacidad y controles reforzados"
@@ -1037,7 +1055,7 @@
   {
     "id": "extra-35",
     "nombre": "Configuración CRM esencial",
-    "descripcion": "Setup base; no incluir agente ni canal WhatsApp",
+    "descripcion": "Configuración CRM esencial.",
     "tipo": "extra",
     "caracteristicas": [
       "Setup base; no incluir agente ni canal WhatsApp"
@@ -1058,7 +1076,7 @@
   {
     "id": "extra-37",
     "nombre": "Usuarios o pipelines adicionales",
-    "descripcion": "Según capacidades reales y consumo/soporte",
+    "descripcion": "Usuarios o pipelines adicionales.",
     "tipo": "extra",
     "caracteristicas": [
       "Según capacidades reales y consumo/soporte"
@@ -1079,7 +1097,7 @@
   {
     "id": "extra-40",
     "nombre": "Bloques de consumo adicional",
-    "descripcion": "Definición transparente de unidad, umbrales, coste por bloque y consentimiento",
+    "descripcion": "Bloques de consumo adicional.",
     "tipo": "extra",
     "caracteristicas": [
       "Definición transparente de unidad, umbrales, coste por bloque y consentimiento"
@@ -1100,7 +1118,7 @@
   {
     "id": "extra-41",
     "nombre": "Más números o asistentes",
-    "descripcion": "Licencias/permisos/consumos y aislamiento separados",
+    "descripcion": "Más números o asistentes.",
     "tipo": "extra",
     "caracteristicas": [
       "Licencias/permisos/consumos y aislamiento separados"
@@ -1121,7 +1139,7 @@
   {
     "id": "dominio-com-independiente",
     "nombre": "Registro de dominio .com estándar",
-    "descripcion": "Registro de dominio .com estándar, sujeto a disponibilidad y cotización.",
+    "descripcion": "Registro de dominio .com estándar.",
     "tipo": "producto",
     "caracteristicas": [
       "Registro de dominio .com estándar, sujeto a disponibilidad y cotización."
@@ -1140,7 +1158,7 @@
   {
     "id": "hosting-basico-independiente",
     "nombre": "Hosting básico independiente",
-    "descripcion": "Hosting básico independiente sujeto a alcance y cotización.",
+    "descripcion": "Hosting básico independiente.",
     "tipo": "producto",
     "caracteristicas": [
       "Hosting básico independiente sujeto a alcance y cotización."
@@ -1159,7 +1177,7 @@
   {
     "id": "dominio-hosting-independiente",
     "nombre": "Dominio .com y hosting básico",
-    "descripcion": "Registro .com estándar y hosting básico, sujetos a disponibilidad y cotización.",
+    "descripcion": "Dominio .com y hosting básico.",
     "tipo": "producto",
     "caracteristicas": [
       "Registro .com estándar y hosting básico, sujetos a disponibilidad y cotización."
@@ -1178,7 +1196,7 @@
   {
     "id": "renovacion-dominio-independiente",
     "nombre": "Renovación de dominio",
-    "descripcion": "Renovación de dominio para un periodo posterior; condiciones y precio por cotizar.",
+    "descripcion": "Renovación de dominio.",
     "tipo": "producto",
     "caracteristicas": [
       "Renovación de dominio para un periodo posterior; condiciones y precio por cotizar."
@@ -1197,7 +1215,7 @@
   {
     "id": "renovacion-hosting-independiente",
     "nombre": "Renovación de hosting",
-    "descripcion": "Renovación de hosting para un periodo posterior; condiciones y precio por cotizar.",
+    "descripcion": "Renovación de hosting.",
     "tipo": "producto",
     "caracteristicas": [
       "Renovación de hosting para un periodo posterior; condiciones y precio por cotizar."

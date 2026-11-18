@@ -122,7 +122,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
           const siguiente=productoSchema.parse(cambio.nuevo);
           await sql`insert into comercial_catalogo(organization_id,id,data) values(${actor.organizationId},${siguiente.id},${JSON.stringify(siguiente)}::text::jsonb)`;
           resultados.push({id:siguiente.id,antes:null,despues:siguiente});
-        } else if (anterior && 'campos' in estado! && estado.campos) {
+        } else if (anterior && estado?.estado === 'propuesto' && 'campos' in estado && estado.campos) {
           const siguiente:Record<string,unknown>={...anterior};
           for(const campo of estado.campos) if(campo.estado==='propuesto') siguiente[campo.campo]=campo.despues;
           if(JSON.stringify(siguiente)!==JSON.stringify(anterior)){

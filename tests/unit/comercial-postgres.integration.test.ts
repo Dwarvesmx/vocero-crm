@@ -63,6 +63,12 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect(final.find(x=>x.id==='web')?.nombre).toBe('Edición concurrente');
     const repetido=await call(owner,{action:'conciliar_catalogo',esperado:final,confirmar:true});
     expect(repetido.cambios).toEqual([]);
+    const conflicto={...entrada,descripcion:'Descripción editada por administración'};
+    await call(owner,{action:'catalogo',producto:conflicto});
+    const antesConflicto=(await comercialLeer(owner)).productos;
+    await call(owner,{action:'conciliar_catalogo',esperado:antesConflicto,confirmar:true});
+    const despuesConflicto=(await comercialLeer(owner)).productos.find(x=>x.id==='web');
+    expect(despuesConflicto).toEqual(conflicto);
   });
   it("Solicitud fuera de catálogo queda pendiente y no permite aprobación",async()=>{
     const q=await preparar({conceptos:[],pendientes:[{descripcion:"Solución personalizada",solicitud:"Evaluar alcance solicitado"}]});

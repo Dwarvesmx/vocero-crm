@@ -52,6 +52,7 @@ describe("worker de envíos", () => {
       const reclamar = vi.fn().mockResolvedValueOnce([job]).mockResolvedValueOnce([]);
       const tx = { update: () => ({ set: () => ({ where: () => ({ returning: async () => [{ id: "d1" }] }) }) }) };
       const db = {
+        execute: vi.fn().mockResolvedValue([]),
         select: () => ({ from: (tabla: unknown) => ({ where: () => ({ limit: async () => tabla === schema.message ? [{ text: "hola" }] : [job] }) }) }),
         update: () => ({ set: () => ({ where: () => ({ returning: reclamar }) }) }),
         transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),

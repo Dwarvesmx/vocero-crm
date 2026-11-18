@@ -49,8 +49,8 @@ export function ComercialPanel() {
     reintentos.current.set(payload,requestKey);
     try {
       const r = await fetch("/api/comercial",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...cmd,requestKey})});
-      const d = await r.json(); if (!r.ok) throw Error(d.error?.message ?? "No se pudo guardar");
-      await cargar();reintentos.current.delete(payload);setMensaje("Guardado");return true;
+      const d = await r.json(); if (!r.ok) throw Error(d.error?.code === 'catalogo_modificado' ? 'El catálogo cambió. Actualiza y revisa una nueva vista previa antes de aplicar.' : d.error?.message ?? "No se pudo guardar");
+      await cargar();reintentos.current.delete(payload);setMensaje(cmd.action === 'conciliar_catalogo' && Array.isArray(d.cambios) ? `Conciliación completada: ${d.cambios.length} conceptos actualizados. Los conflictos se conservaron.` : "Guardado");return true;
     } catch(e) { setMensaje(e instanceof Error ? e.message : "Error"); return false; }
     finally {setBusy(false);}
   }
@@ -65,9 +65,12 @@ export function ComercialPanel() {
       <div className="space-y-2 rounded-md border p-3">
         <Button variant="outline" disabled={busy} onClick={()=>{setPreviaCatalogo(structuredClone(datos.productos));setConfirmarCatalogo(false);}}>Revisar actualización del catálogo</Button>
         {previaCatalogo && <div className="space-y-3">
-          <p>Vista previa: se aplican solo los campos que coinciden con la versión anterior. Los conflictos se conservan.</p>
+          <p>Vista previa: se aplican solo fichas sin conflictos. Si un campo fue editado, se conserva la ficha completa.</p>
           <Button variant="outline" onClick={()=>{const blob=new Blob([JSON.stringify(previaCatalogo,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='catalogo-antes.json';a.click();URL.revokeObjectURL(url);}}>Descargar valores anteriores</Button>
-          {previsualizarCatalogo(previaCatalogo).map(item=><details key={item.id} className="rounded border p-2"><summary>{item.id}: {item.estado}</summary><pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify(item,null,2)}</pre></details>)}
+          {previsualizarCatalogo(previaCatalogo).map(item=><details key={item.id} className="rounded border p-2"><summary className="cursor-pointer font-medium">{previaCatalogo.find(p=>p.id===item.id)?.nombre ?? ("despues" in item && item.despues ? item.despues.nombre : item.id)} · {item.id} · {({nuevo:"Nuevo",propuesto:"Cambios propuestos",aplicado:"Sin cambios",conflicto:"Revisar conflicto",ausente:"No existe"} as Record<string,string>)[item.estado]}</summary>
+            {"campos" in item && item.campos?.map(c=><div key={c.campo} className="space-y-1 border-t py-2"><strong>{c.campo} · {c.estado}</strong><p>Actual: {typeof c.actual==='string'?c.actual:JSON.stringify(c.actual)}</p><p>Propuesto: {typeof c.despues==='string'?c.despues:JSON.stringify(c.despues)}</p>{c.estado==='conflicto'&&<p>Este campo fue editado; la ficha completa no se modificará.</p>}</div>)}
+            {"despues" in item && item.despues && <div className="space-y-1 border-t py-2"><p>{item.despues.descripcion}</p><p>Precio único: {dinero(item.despues.unico)} · Mensual: {dinero(item.despues.mensual)} · {item.despues.precioEstado}</p><p>{item.despues.condiciones}</p>{item.estado==='conflicto'&&<p>Ya existe un concepto diferente con este identificador; no se modificará.</p>}</div>}
+          </details>)}
           <label className="flex gap-2"><input type="checkbox" checked={confirmarCatalogo} onChange={e=>setConfirmarCatalogo(e.target.checked)}/>Confirmo aplicar los cambios propuestos después de revisar la vista previa.</label>
           <Button disabled={busy||!confirmarCatalogo} onClick={async()=>{if(await enviar({action:'conciliar_catalogo',esperado:previaCatalogo,confirmar:true})){setPreviaCatalogo(null);setConfirmarCatalogo(false);}}}>Aplicar cambios revisados</Button>
         </div>}

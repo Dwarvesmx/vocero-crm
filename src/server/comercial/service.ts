@@ -3,7 +3,7 @@ import type { TransactionSql } from "postgres";
 import { getSql } from "@/lib/db";
 import { calcular, ComercialError, comandoSchema, enlaceSeguro, exigirAdmin, productoSchema,
   type Actor, type Comando, type Producto, type Snapshot } from "./contracts";
-import { respuestaAviso, autorizacionAvisoCompleta } from "./consentimiento";
+import { respuestaAvisoEnContexto, autorizacionAvisoCompleta } from "./consentimiento";
 import semilla from "./catalogo-v3.json";
 import cambiosConciliacion from "./catalogo-conciliacion-v3.json";
 import { previsualizarCatalogo } from "./catalogo-preview";
@@ -244,7 +244,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                   and otra.data->>'conversationId'=${cmd.conversationId} and otra.created_at>e.created_at and otra.created_at<=${m.created_at}) limit 1`:[];
               const [salida]=m?await sql`select text from message where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
                 and scope_kind='commercial' and direction='out' and created_at>=${v!.created_at} and created_at<=${m.created_at} order by created_at desc limit 1`:[];
-              if(!m||!pregunta||!respuestaAviso(String(m.text))||
+              if(!m||!pregunta||!respuestaAvisoEnContexto(String(m.text),String(salida?.text??''))||
                 !/(?=.*(?:avis|mensaje))(?=.*(?:cotizaci[oó]n|propuesta|autoriza|aprueb))/iu.test(String(salida?.text??'')))throw new ComercialError('consentimiento_no_acreditado',422);
             }
           }else if(permiso.preguntaPendiente)return await estadoCotizacion(sql,actor.organizationId,q);

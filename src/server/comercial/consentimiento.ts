@@ -7,6 +7,16 @@ export function respuestaAviso(texto:string){
   return /^s[ií](?:[,\s]+av[ií]same(?:\s+por\s+(?:este\s+)?whatsapp)?(?:\s+cuando\s+(?:(?:mi |la |esta )?cotizaci[oó]n\s+est[eé]\s+(?:autorizada|aprobada)|se\s+(?:apruebe|autorice)(?:\s+(?:esta |mi |la )?cotizaci[oó]n)?))?)?$/iu.test(primera);
 }
 
+/** Esta confirmación breve solo vale después de una pregunta explícita de aviso. */
+export function respuestaAvisoEnContexto(texto: string, pregunta: string): boolean {
+  if (!/^s[ií][,\s]+quiero[.!\s]*$/iu.test(texto.trim())) return respuestaAviso(texto);
+  const preguntas = [...pregunta.matchAll(/¿([^¿?]+)\?/gu)];
+  if (preguntas.length !== 1 || (pregunta.match(/\?/gu)?.length ?? 0) !== 1) return false;
+  const frase = preguntas[0]![1]!;
+  return /(?:\bte (?:avis(?:e|emos|o|amos)|notifique(?:mos)?|notifico)\b|\b(?:avisarte|notificarte|recibir (?:el |un )?aviso)\b)/iu.test(frase) &&
+    /(?:cotizaci[oó]n|propuesta)/iu.test(frase) && /(?:autoriza|aprob|aprueb)/iu.test(frase);
+}
+
 /** Una autorización que nombra expresamente el aviso de esta cotización no
  * necesita que el cliente repita literalmente nuestra pregunta. */
 export function autorizacionAvisoCompleta(texto:string){

@@ -21,3 +21,11 @@ it('consentimiento espontáneo con preguntas distingue rechazo explícito',()=>{
  expect(autorizacionAvisoCompleta('No autorizo que me avises por este WhatsApp cuando esté aprobada')).toBe(false);
  expect(autorizacionAvisoCompleta('Desautorizo que me avises por este WhatsApp cuando esté aprobada')).toBe(false);
 });
+
+it('consentimiento espontáneo reconoce la frase original y excluye negativas y condiciones',()=>{
+ const frase='También te autorizo expresamente a avisarme por este WhatsApp cuando la cotización esté aprobada';
+ expect(autorizacionAvisoCompleta('Quiero cotizar 12 productos. '+frase+'.')).toBe(true);
+ expect(autorizacionAvisoCompleta('No '+frase.toLowerCase()+'.')).toBe(false);
+ expect(autorizacionAvisoCompleta(frase+' solo si acepto primero.')).toBe(false);
+ expect(autorizacionAvisoCompleta(frase+'. Pero no me avises todavía.')).toBe(false);
+});

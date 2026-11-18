@@ -363,11 +363,32 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await sql`insert into zernio_whatsapp_credentials(id,organization_id,account_ref,token_cipher,token_iv,token_tag,secret_cipher,secret_iv,secret_tag,enabled)
       values('cred-aviso',${owner.organizationId},'cuenta-sintetica','x','x','x','x','x','x',true)`;
     await sql`update conversation set channel='whatsapp',channel_thread_ref='hilo-sintetico',last_inbound_at=clock_timestamp(),ai_enabled=true where id='conv'`;
-    const q=await preparar({conceptos:[{productoId:'estandar',cantidad:1}],especial:'Cafetería con materiales preparados'});
+    const origen='consent-aviso';
+    const texto='Quiero cotizar un catálogo para 12 productos. También te autorizo expresamente a avisarme por este WhatsApp cuando la cotización esté aprobada.';
+    await sql`insert into message(id,organization_id,conversation_id,direction,text,created_at)
+      values(${origen},${owner.organizationId},'conv','in',${texto},clock_timestamp()-interval '1 second')`;
+    const q=await call(bot,{action:'preparar',conversationId:'conv',mensajeOrigenId:origen,
+      propuesta:{conceptos:[{productoId:'estandar',cantidad:1}],especial:'Catálogo sintético'}});
     const ref={conversationId:'conv',cotizacionId:q.cotizacionId,version:1};
+    expect(q.version).toBe(1);
+    const [evidencia]=await sql`select e.data, m.created_at < v.created_at as anterior
+      from comercial_evento e join comercial_version v on v.cotizacion_id=e.cotizacion_id and v.organization_id=e.organization_id and v.version=1
+      join message m on m.id=${origen} and m.organization_id=e.organization_id
+      where e.cotizacion_id=${q.cotizacionId} and e.action='preparar'`;
+    expect(evidencia).toMatchObject({anterior:true,data:{mensajeOrigenId:origen,versionCreada:1}});
     await expect(call(bot,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:'inexistente'})).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
-    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-aviso',${owner.organizationId},'conv','in','Sí, avísame cuando mi cotización esté autorizada')`;
-    await call(bot,{action:'solicitar_aprobacion',...ref,mensajeAvisoId:'consent-aviso'});
+    const solicitar=(requestKey:string)=>botPost(new Request('http://127.0.0.1/api/bot/comercial',{
+      method:'POST',headers:{'x-api-key':process.env.BOT_API_KEY!,'content-type':'application/json'},
+      body:JSON.stringify({action:'solicitar_aprobacion',...ref,mensajeAvisoId:origen,requestKey}),
+    }));
+    for(const key of ['aviso-origen','aviso-origen','aviso-origen-reintento']){
+      const respuesta=await solicitar(key);
+      expect(await respuesta.json()).toMatchObject({cotizacionId:q.cotizacionId,version:1,consentimiento:{registrado:true}});
+      expect(respuesta.status).toBe(200);
+    }
+    const permisos=await sql`select data from comercial_evento where cotizacion_id=${q.cotizacionId} and action='solicitar_aprobacion'`;
+    expect(permisos).toHaveLength(1);
+    expect(permisos[0]?.data).toMatchObject({mensajeAvisoId:origen,version:1});
     const decision=comandoSchema.parse({action:'decidir',...ref,requestKey:'decision-aviso',decision:'aprobar',motivo:'Revisado'});
     await comercialEjecutar(owner,decision); await comercialEjecutar(owner,decision);
     await prepararAvisosComerciales(); await prepararAvisosComerciales();

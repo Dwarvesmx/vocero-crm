@@ -22,6 +22,10 @@ export function respuestaAvisoEnContexto(texto: string, pregunta: string): boole
 export function autorizacionAvisoCompleta(texto:string){
   const primera=texto.trim().split(/(?:[.!?]\s+|\n|,?\s+pero\s+)/iu)[0]!;
   const normal=texto.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  // El permiso puede seguir a la solicitud de cotización en otra oración.
+  const permisoInicial = /(?:^|[.!\n])\s*(?:tambien\s+)?te\s+autorizo\s+expresamente\s+a\s+avisarme\s+por\s+este\s+whatsapp\s+cuando\s+la\s+cotizacion\s+este\s+aprobada\s*(?:\.|!|$)/u;
+  const negacionOCondicion = /\b(?:desautorizo|no\s+(?:(?:te\s+)?autorizo|(?:me\s+)?(?:avises|escribas|envies)|(?:quiero|deseo)\s+que\s+me\s+avises)|solo\s+si|unicamente\s+si|siempre\s+que)\b/u;
+  if (permisoInicial.test(normal) && !negacionOCondicion.test(normal)) return true;
   if(!/desautorizo|no (?:te )?autorizo|no (?:me )?(?:avises|escribas|envies)|solo si|siempre que/.test(normal) && /\b(?:tambien )?autorizo que me avises por (?:este )?whatsapp cuando (?:esta|este) (?:aprobada|autorizada)/.test(normal))return true;
   return respuestaAviso(texto) && /av[ií]same/iu.test(primera) && /cuando/iu.test(primera) && /cotizaci[oó]n/iu.test(primera);
 }

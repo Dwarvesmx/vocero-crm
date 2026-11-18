@@ -154,6 +154,8 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
           where e.organization_id=${actor.organizationId} and q.conversation_id=${cmd.conversationId} and e.action='preparar'
           and e.data->>'mensajeOrigenId'=${cmd.mensajeOrigenId} order by e.created_at desc limit 1`;
         if(anterior){if(cmd.cotizacionId && cmd.cotizacionId!==anterior.id)throw new ComercialError('mensaje_origen_reutilizado',422);return estadoCotizacion(sql,actor.organizationId,anterior);}
+        if(/\bno\s+(?:quiero|deseo|necesito|solicito|prepares?|generes?|registres?)\b[^.!?\n]{0,50}\b(?:cotiz\w*|propuesta|presupuesto)\b/iu.test(String(origen.text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
+          throw new ComercialError('cotizacion_no_solicitada',422);
         const todas=await sql`select * from comercial_cotizacion where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId} order by created_at desc`;
         const [activa]=await sql`select cotizacion_id from comercial_evento where organization_id=${actor.organizationId} and action='preparar'
           and data->>'conversationId'=${cmd.conversationId} and data->>'mensajeOrigenId' is not null order by created_at desc limit 1`;

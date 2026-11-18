@@ -45,6 +45,13 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await call(owner,{action:"catalogo",producto:{...producto,id:"extra",tipo:"extra",unico:29000,compatibles:["estandar"]}});
   });
   afterAll(async()=>{await sql?.end();});
+  it('La negativa explícita impide crear desde el servidor aunque el adaptador lo solicite',async()=>{
+    const id=randomUUID();
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${id},${owner.organizationId},'conv','in','Solo quiero información de una lavandería. No deseo una cotización.')`;
+    const antes=(await comercialLeer(owner,'conv')).cotizaciones.length;
+    await expect(call(bot,{action:'preparar',conversationId:'conv',mensajeOrigenId:id,propuesta:{conceptos:[{productoId:'estandar',cantidad:1}]}})).rejects.toMatchObject({code:'cotizacion_no_solicitada'});
+    expect((await comercialLeer(owner,'conv')).cotizaciones).toHaveLength(antes);
+  });
   it("Conciliación conserva ediciones, rechaza concurrencia y es idempotente",async()=>{
     const entrada=structuredClone(semilla.find(x=>x.id==='web')!);
     const cambio=cambios.find(x=>x.id==='web')!;

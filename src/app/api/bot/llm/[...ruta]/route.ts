@@ -32,6 +32,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ ruta: s
     ruta: ruta.map(encodeURIComponent).join("/"),
     cuerpoCrudo: await req.text(),
     contentType: req.headers.get("content-type"),
+    correlationId: req.headers.get("x-llm-correlation-id"),
+    intento: req.headers.get("x-llm-attempt"),
   });
   if (!r.ok) return apiError(r.status, r.code, r.message);
   return new Response(r.cuerpo, { status: r.status, headers: { "Content-Type": r.contentType } });

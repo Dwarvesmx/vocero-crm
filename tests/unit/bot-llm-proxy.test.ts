@@ -147,3 +147,24 @@ describe("/api/bot/llm — el reenvío", () => {
     for (const v of vistas) expect(v).not.toContain(LLAVE_IA);
   });
 });
+
+
+it("correlaciona el estado HTTP sin registrar cuerpos, credenciales ni cabeceras arbitrarias", async () => {
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const id = "be28cb2f-45cb-4469-a2d5-95031cbd3bac";
+    fetchMock.mockResolvedValue(new Response('{"error":"dato-privado"}', { status: 429 }));
+    await peticion({ "x-api-key": LLAVE_BOT, "x-llm-correlation-id": id, "x-llm-attempt": "2" });
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      servicio: "vocero", correlation_id: id, intento: 2, proveedor: "personalizado",
+      http_upstream: 429, http_devuelto: 429, categoria: "error_http",
+    });
+    await peticion({ "x-api-key": LLAVE_BOT, "x-llm-correlation-id": "dato-privado" });
+    const salida = JSON.stringify(log.mock.calls);
+    for (const privado of [LLAVE_BOT, LLAVE_IA, "dato-privado", CUERPO]) {
+      expect(salida).not.toContain(privado);
+    }
+  } finally {
+    log.mockRestore();
+  }
+});

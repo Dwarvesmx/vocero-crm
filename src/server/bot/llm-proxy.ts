@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { apiRoot } from "@/lib/ai/presets";
 import { resolveAiProvider } from "@/lib/ai/provider";
 import { marcarEstadoPorRespuesta } from "@/server/ai/credentials";
@@ -35,9 +36,30 @@ export async function pensarPorElCerebro(input: {
   ruta: string;
   cuerpoCrudo: string;
   contentType: string | null;
+  correlationId?: string | null;
+  intento?: string | null;
 }): Promise<ResultadoProxy> {
-  const r = await resolveAiProvider(input.organizationId);
+  const inicio = performance.now();
+  const correlationId = input.correlationId && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.correlationId)
+    ? input.correlationId : randomUUID();
+  const intento = input.intento && /^[1-9][0-9]?$/.test(input.intento) ? Number(input.intento) : null;
+  let proveedor: string | null = null;
+  let httpUpstream: number | null = null;
+  const registrar = (categoria: string, httpDevuelto: number) => {
+    if (input.ruta !== "chat/completions") return;
+    console.info(JSON.stringify({
+      timestamp_utc: new Date().toISOString(), servicio: "vocero", evento: "llm_proxy",
+      correlation_id: correlationId, intento, proveedor, http_upstream: httpUpstream,
+      http_devuelto: httpDevuelto, categoria, duracion_ms: Math.round(performance.now() - inicio),
+    }));
+  };
+
+  const r = await resolveAiProvider(input.organizationId).catch((error: unknown) => {
+    registrar("error_resolucion", 500);
+    throw error;
+  });
   if (!r.ok) {
+    registrar("sin_credencial", 402);
     return {
       ok: false,
       status: 402,
@@ -53,7 +75,16 @@ export async function pensarPorElCerebro(input: {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LLM_PROXY_TIMEOUT_MS);
   try {
-    const res = await fetch(`${apiRoot(provider.baseUrl)}/${input.ruta}`, {
+    const url = new URL(`${apiRoot(provider.baseUrl)}/${input.ruta}`);
+    proveedor = ({
+      "openrouter.ai": "openrouter",
+      "api.openai.com": "openai",
+      "generativelanguage.googleapis.com": "google",
+      "api.anthropic.com": "anthropic",
+      "api.deepseek.com": "deepseek",
+      "api.groq.com": "groq",
+    } as Record<string, string>)[url.hostname] ?? "personalizado";
+    const res = await fetch(url.href, {
       method: "POST",
       headers: {
         // La llave se pone AQUÍ y solo aquí: no se loguea ni vuelve al cerebro.
@@ -63,6 +94,7 @@ export async function pensarPorElCerebro(input: {
       body: input.cuerpoCrudo,
       signal: controller.signal,
     });
+    httpUpstream = res.status;
     const cuerpo = await res.text();
 
     // El estado de la credencial lo dicta quien cobra. El respaldo del
@@ -74,6 +106,7 @@ export async function pensarPorElCerebro(input: {
       );
     }
 
+    registrar(res.ok ? "respuesta_http" : "error_http", res.status);
     return {
       ok: true,
       status: res.status,
@@ -81,6 +114,7 @@ export async function pensarPorElCerebro(input: {
       contentType: res.headers.get("content-type") ?? "application/json",
     };
   } catch (err) {
+    registrar(err instanceof Error && err.name === "AbortError" ? "timeout" : httpUpstream === null ? "error_comunicacion" : "error_lectura_respuesta", 504);
     // Timeout o red: no fue el proveedor quien rechazó la llave, no se pausa.
     return {
       ok: false,

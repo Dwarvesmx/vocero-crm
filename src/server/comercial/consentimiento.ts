@@ -8,7 +8,7 @@ function tieneObjecion(texto: string): boolean {
 }
 
 const aprobacion = /\bcuando\s+(?:(?:(?:(?:mi|la|esta|esa|tu)\s+)?(?:nueva\s+)?(?:cotizacion|propuesta)\s+)?(?:este|sea|quede)\s+(?:aprobada|autorizada)|(?:se\s+)?(?:aprueb[ae]n?|autoric[ae]n?)(?:\s+(?:(?:mi|la|esta|esa|tu)\s+)?(?:nueva\s+)?(?:cotizacion|propuesta))?)/u;
-const otraReferencia = /\b(?:otr[ao]|anterior|pasad[ao]|distint[ao]|vieja|v\s*\d+|version\s+\d+)\b|\bcotizacion\s+#?\d/u;
+const otraReferencia = /\b(?:otr[ao]|anterior|pasad[ao]|distint[ao]|vieja|v\s*\d+|version\s+\d+)\b|\b(?:cotizacion|propuesta)\s+#?(?:\d|[0-9a-f]{8}\b)/u;
 
 /** Identifica una única pregunta de permiso, compartida por lectura y escritura. */
 export function preguntaDeAviso(texto: string): boolean {
@@ -49,4 +49,33 @@ export function autorizacionAvisoCompleta(texto: string): boolean {
     return Boolean(partes[1] || /\b(?:cotizacion|propuesta)\b/u.test(evento)) &&
       evento.match(aprobacion)?.[0] === evento;
   });
+}
+
+/** Extrae una referencia ligada a la autorización. El servicio comprueba su alcance y unicidad. */
+export function referenciaAvisoExplicita(texto: string): { id: string; version: number } | null {
+  const normal = normalizar(texto);
+  const referencia = /\b(cotizacion|propuesta)\s+#?([0-9a-f]{8}(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?)\s*,?\s+v(?:ersion)?\s*([1-9]\d{0,9})\b(?![.,]\d)/gu;
+  const coincidencias = [...normal.matchAll(referencia)];
+  if (coincidencias.length !== 1) return null;
+  const [original, objeto, id, version] = coincidencias[0]!;
+  // La referencia debe estar en la propia frase de autorización, junto al objeto aprobado.
+  const antes = normal.slice(0, coincidencias[0]!.index);
+  const inicio = Math.max(antes.lastIndexOf('.'), antes.lastIndexOf('!'), antes.lastIndexOf('\n')) + 1;
+  const reducida = normal.replace(original!, objeto!);
+  const frase = reducida.slice(inicio).split(/[.!\n]/u, 1)[0]!;
+  if (!autorizacionAvisoCompleta(frase) || !autorizacionAvisoCompleta(reducida)) return null;
+  return { id: id!, version: Number(version) };
+}
+
+/** Distingue una mención a la propuesta vigente de una autorización sin destinatario inequívoco. */
+export function autorizacionAvisoNatural(texto: string): 'vigente' | 'sin_referencia' | null {
+  const frase = normalizar(texto).replace(/[.!]+$/u, '').trim();
+  if (tieneObjecion(frase) || otraReferencia.test(frase)) return null;
+  const objeto = String.raw`(?:(?:mi|la|esta|esa)\s+)?(?:cotizacion|propuesta)(?:\s+(?<vigente>actual|vigente|que (?:acabamos de|me acabas de) (?:preparar|hacer|enviar)))?`;
+  const evento = String.raw`cuando\s+(?:(?:se\s+)?(?:apruebe[n]?|autorice[n]?)(?:\s+${objeto})?|(?:la\s+)?aprueben|(?:este|sea|quede)\s+(?:aprobada|autorizada))`;
+  const aviso = String.raw`(?:(?:por favor,?\s+)?(?:avisame|notificame|escribeme|mandame\s+(?:un\s+)?(?:mensaje|whatsapp))|(?:me\s+(?:avisas|notificas|escribes)|puedes\s+(?:avisarme|notificarme|escribirme))|(?:te\s+)?autorizo(?:\s+expresamente)?\s+(?:a\s+(?:avisarme|notificarme)|que\s+me\s+(?:avises|notifiques)))(?:\s+por\s+(?:este\s+)?whatsapp)?`;
+  const coincidencia = frase.match(new RegExp(`^${aviso}\\s+${evento}(?:,?\\s+por favor)?$`, 'u')) ??
+    frase.match(new RegExp(`^${evento},?\\s+${aviso}(?:,?\\s+por favor)?$`, 'u'));
+  if (coincidencia) return coincidencia.groups?.vigente ? 'vigente' : 'sin_referencia';
+  return autorizacionAvisoCompleta(texto) ? 'sin_referencia' : null;
 }

@@ -45,6 +45,48 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await call(owner,{action:"catalogo",producto:{...producto,id:"extra",tipo:"extra",unico:29000,compatibles:["estandar"]}});
   });
   afterAll(async()=>{await sql?.end();});
+  it('INC-01 resuelve la propuesta de aviso y persiste un solo consentimiento por versión', async () => {
+    const anterior = await preparar();
+    const actual = await preparar();
+    const mensaje = async (text: string, direction = 'in') => {
+      const id = randomUUID();
+      await sql`insert into message(id,organization_id,conversation_id,direction,text)
+        values(${id},${owner.organizationId},'conv',${direction},${text})`;
+      return id;
+    };
+    const aviso = (cotizacionId: string, mensajeAvisoId?: string, requestKey = randomUUID()) =>
+      call(bot, { action: 'solicitar_aprobacion', conversationId: 'conv', cotizacionId, version: 1, mensajeAvisoId, requestKey });
+
+    const ambiguo = await mensaje('Cuando aprueben mi propuesta, mándame un WhatsApp.');
+    await expect(aviso(actual.cotizacionId, ambiguo)).rejects.toMatchObject({ code: 'seleccionar_negociacion' });
+    for (const texto of ['Claro', 'No me avises cuando aprueben la propuesta actual',
+      'Avísame cuando aprueben la propuesta actual si mantienen el precio']) {
+      await expect(aviso(actual.cotizacionId, await mensaje(texto))).rejects.toMatchObject({ code: 'consentimiento_no_acreditado' });
+    }
+
+    const vigente = await mensaje('Cuando aprueben la propuesta actual, mándame un WhatsApp.');
+    await expect(aviso(anterior.cotizacionId, vigente)).rejects.toMatchObject({ code: 'seleccionar_negociacion' });
+    const requestKey = randomUUID();
+    const permisos = await Promise.all([aviso(actual.cotizacionId, vigente, requestKey), aviso(actual.cotizacionId, vigente, requestKey), aviso(actual.cotizacionId, vigente)]);
+    for (const permiso of permisos) expect(permiso).toMatchObject({ consentimiento: { registrado: true } });
+    const permisosActual = await sql`select data->>'mensajeAvisoId' as mensaje from comercial_evento
+      where cotizacion_id=${actual.cotizacionId} and action='solicitar_aprobacion' and data->>'mensajeAvisoId' is not null`;
+    expect(permisosActual).toEqual([{ mensaje: vigente }]);
+
+    const prefijo = anterior.cotizacionId.slice(0, 8);
+    const versionErronea = await mensaje(`Autorizo que me avises por este WhatsApp cuando se apruebe mi cotización ${prefijo}, versión 2.`);
+    await expect(aviso(anterior.cotizacionId, versionErronea)).rejects.toMatchObject({ code: 'consentimiento_no_acreditado' });
+    const explicita = await mensaje(`Autorizo que me avises por este WhatsApp cuando se apruebe mi cotización ${prefijo}, versión 1.`);
+    await expect(aviso(anterior.cotizacionId, explicita)).resolves.toMatchObject({ consentimiento: { registrado: true } });
+
+    const tercera = await preparar();
+    await mensaje('También estoy viendo otro proyecto, por ahora solo quiero información.');
+    const proyectoSinCotizar = await mensaje('Avísame cuando aprueben la propuesta actual.');
+    await expect(aviso(tercera.cotizacionId, proyectoSinCotizar)).rejects.toMatchObject({ code: 'seleccionar_negociacion' });
+    await aviso(tercera.cotizacionId);
+    await mensaje('¿Te aviso por este WhatsApp cuando tu cotización esté autorizada?', 'out');
+    await expect(aviso(tercera.cotizacionId, await mensaje('Claro'))).resolves.toMatchObject({ consentimiento: { registrado: true } });
+  });
   it('La negativa explícita impide crear desde el servidor aunque el adaptador lo solicite',async()=>{
     const id=randomUUID();
     await sql`insert into message(id,organization_id,conversation_id,direction,text) values(${id},${owner.organizationId},'conv','in','Solo quiero información de una lavandería. No deseo una cotización.')`;

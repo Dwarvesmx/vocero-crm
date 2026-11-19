@@ -1,5 +1,7 @@
 # Comercial V1 · entrega controlada · 2026-11-16
 
+2026-11-19 · INC-01 PROBADO en local. El aviso acepta una referencia explícita con ID completo o prefijo único y versión exacta. Para lenguaje cotidiano, Vocero comprueba si el origen, la única propuesta del hilo, una mención a la negociación vigente respaldada por una preparación persistida o una pregunta vigente permiten identificar la propuesta. Si hay ambigüedad, devuelve `seleccionar_negociacion` para pedir aclaración. Una afirmación breve sigue exigiendo una pregunta inequívoca y vigente. Sin cambios a Nea, migraciones o aceptación y pago. Verificación focalizada: 21 casos de consentimiento, escenario PostgreSQL aislado `node scripts/test-comercial-isolated.mjs --inc01`, TypeScript y ESLint. El incidente sigue abierto hasta acreditar un único evento de consentimiento para la versión correcta en WhatsApp real.
+
 Estado del código: PROBADO en entorno local sintético. No desplegado; no habilitado en Lukas. Especificación previa: [spec](../../specs/comercial-v1/spec.md).
 
 ## Base y aislamiento

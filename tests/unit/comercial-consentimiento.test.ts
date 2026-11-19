@@ -1,5 +1,17 @@
 import {describe,it,expect} from 'vitest';
-import {respuestaAviso,respuestaAvisoEnContexto,autorizacionAvisoCompleta} from '@/server/comercial/consentimiento';
+import {respuestaAviso,respuestaAvisoEnContexto,autorizacionAvisoCompleta,referenciaAvisoExplicita} from '@/server/comercial/consentimiento';
+
+it('INC-01 liga el aviso explícito a una sola cotización y versión',()=>{
+  const frase = 'Autorizo que me avises por este WhatsApp cuando se apruebe mi cotización abcdef12, versión 1.';
+  expect(referenciaAvisoExplicita(frase)).toEqual({ id: 'abcdef12', version: 1 });
+  expect(referenciaAvisoExplicita('Avísame cuando la propuesta abcdef12-aaaa-bbbb-cccc-0123456789ab esté aprobada.')).toBeNull();
+  expect(referenciaAvisoExplicita('Te autorizo a notificarme por WhatsApp cuando aprueben la propuesta abcdef12-aaaa-bbbb-cccc-0123456789ab V2.')).toEqual({ id: 'abcdef12-aaaa-bbbb-cccc-0123456789ab', version: 2 });
+  expect(referenciaAvisoExplicita('Sí. Cotización abcdef12, versión 1.')).toBeNull();
+  expect(referenciaAvisoExplicita(frase.replace('versión 1', 'versión 1.5'))).toBeNull();
+  expect(referenciaAvisoExplicita('No '+frase)).toBeNull();
+  expect(referenciaAvisoExplicita(frase+' Propuesta fedcba21.')).toBeNull();
+  expect(referenciaAvisoExplicita(frase+' Si mantienen el precio.')).toBeNull();
+});
 describe('Autorización del aviso con preguntas adicionales',()=>{
  it.each(['Sí','Sí, avísame','Sí, avísame cuando se apruebe, pero antes explícame el servicio y precio','Sí, avísame por este WhatsApp cuando se apruebe esta cotización.\nPero antes, ¿qué incluye?'])( 'reconoce autorización textual: %s',texto=>expect(respuestaAviso(texto)).toBe(true));
  it.each(['No','No me avises','Sí, pero no me escribas','Sí avísame solo si bajas el precio','¿Me avisas?','Sí quiero cotizar'])( 'no transforma otra intención en consentimiento: %s',texto=>expect(respuestaAviso(texto)).toBe(false));

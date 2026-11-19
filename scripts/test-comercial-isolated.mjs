@@ -41,7 +41,9 @@ try{
   if(count.n!==45||sentinel.name!=="Registro previo sintético")throw Error("Migración no conserva base");
   console.log("Migración base 0000–0043 → 0044 comercial aplicada dos veces; migrador anterior compatible; journal 45, fila previa conservada.");
  }finally{await sql.end();}
- if(process.argv.includes("--inc01")){
+ if(process.argv.includes("--inc01-diagnostico")){
+  ejecutar(process.execPath,["node_modules/vitest/vitest.mjs","run","tests/unit/comercial-postgres.integration.test.ts","-t","Diagnóstico focalizado INC-01"],local);
+ } else if(process.argv.includes("--inc01")){
   ejecutar(process.execPath,["node_modules/vitest/vitest.mjs","run","tests/unit/comercial-postgres.integration.test.ts","-t","INC-01"],local);
  } else if(process.argv.includes("--circuit")){
   ejecutar(process.execPath,["node_modules/vitest/vitest.mjs","run","tests/unit/lukas-circuito.integration.test.ts"],{...local,

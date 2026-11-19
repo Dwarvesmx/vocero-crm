@@ -97,6 +97,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
     const [previo] = await sql`select hash,result from comercial_reintento where organization_id=${actor.organizationId} and actor=${who} and key=${cmd.requestKey}`;
     if (previo) {
       if (previo.hash !== hash) throw new ComercialError("clave_reutilizada");
+      if (cmd.action === 'solicitar_aprobacion' && previo.result.diagnosticoInc01 === true) return previo.result;
       if(cmd.action==='preparar'||cmd.action==='solicitar_aprobacion'){
         const id=cmd.action==='preparar'?previo.result.cotizacionId:cmd.cotizacionId;
         const [actual]=await sql`select * from comercial_cotizacion where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId} and id=${id}`;
@@ -107,6 +108,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
       return previo.result;
     }
     let result: Record<string, unknown> = {};
+    let diagnosticoAviso: Record<string, unknown> | null = null;
     let quoteId: string | null = "cotizacionId" in cmd ? cmd.cotizacionId??null : null;
     if (cmd.action === "sembrar") {
       exigirAdmin(actor);
@@ -235,9 +237,27 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
             if(origenVinculado && origenVinculado.cotizacion_id!==quoteId)throw new ComercialError('consentimiento_de_otra_negociacion',422);
             if(origenVinculado && origenVinculado.version!==String(cmd.version))throw new ComercialError('consentimiento_no_acreditado',422);
 
-            const [m] = await sql`select text,created_at from message where organization_id=${actor.organizationId}
+            const [m] = await sql`select text,created_at,wa_message_id,extract(epoch from created_at)*1000 as creado_ms from message where organization_id=${actor.organizationId}
               and conversation_id=${cmd.conversationId} and id=${cmd.mensajeAvisoId} and direction='in'
               and scope_kind='commercial' and created_at<=clock_timestamp() and (created_at>=${v!.created_at} or exists(select 1 from comercial_evento origen where origen.organization_id=${actor.organizationId} and origen.cotizacion_id=${quoteId} and origen.action='preparar' and origen.data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and origen.data->>'versionCreada'=${String(cmd.version)}))`;
+            const inicio = Number(process.env.INC01_DIAGNOSTICO_INICIO_MS);
+            const fin = Number(process.env.INC01_DIAGNOSTICO_FIN_MS);
+            const ahora = Date.now();
+            const ventana = Number.isSafeInteger(inicio) && Number.isSafeInteger(fin) && fin > inicio &&
+              fin - inicio <= 30 * 60_000 && ahora >= inicio && ahora < fin;
+            const alcance = process.env.INC01_DIAGNOSTICO_ACTIVO === 'true' && actor.role === 'bot' && !actor.userId && ventana &&
+              actor.organizationId === process.env.INC01_DIAGNOSTICO_ORGANIZACION &&
+              String(q.contact_id) === process.env.INC01_DIAGNOSTICO_CONTACTO &&
+              cmd.conversationId === 'cv_23blpiykaljo7xnuwywg' &&
+              quoteId === '7cca677e-38ab-4395-8386-6df9435c0da2' && cmd.version === 1 && q.estado === 'pendiente';
+            const hashTexto = alcance && m ? createHash('sha256').update(String(m.text).trim()).digest('hex') : null;
+            const diagnostico = Boolean(alcance && m?.wa_message_id && hashTexto === process.env.INC01_DIAGNOSTICO_TEXTO_SHA256 &&
+              Number(m.creado_ms) >= inicio &&
+              (await contexto(sql, actor, cmd.conversationId)).contact_id === q.contact_id);
+            const [usado] = diagnostico ? await sql`select id,data->>'mensajeAvisoId' as mensaje from comercial_evento
+              where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='diagnostico_consentimiento_inc01' limit 1` : [];
+            if (usado?.mensaje === cmd.mensajeAvisoId) return {cotizacionId:quoteId,version:cmd.version,estado:q.estado,
+              consentimiento:{registrado:true,preguntaPendiente:false},diagnosticoInc01:true,eventoId:usado.id};
             // Sin el vínculo de creación, una frase espontánea no elige entre varias cotizaciones.
             const natural = m ? autorizacionAvisoNatural(String(m.text)) : null;
             const [alternativa]=m&&natural&&!origenVinculado?await sql`select 1 from comercial_cotizacion
@@ -265,6 +285,10 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
             }
             if (m && !completa) {
               const referencia = referenciaAvisoExplicita(String(m.text));
+              if (diagnostico && referencia && (referencia.version !== cmd.version ||
+                (referencia.id !== quoteId.toLowerCase() && referencia.id !== quoteId.toLowerCase().slice(0,8)))) {
+                throw new ComercialError('consentimiento_de_otra_negociacion',422);
+              }
               if (referencia?.version === cmd.version) {
                 const id = quoteId.toLowerCase();
                 if (referencia.id === id) completa = true;
@@ -272,6 +296,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                   const [colision] = await sql`select 1 from comercial_cotizacion
                     where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
                       and id<>${quoteId} and lower(left(id,8))=${referencia.id} limit 1`;
+                  if (diagnostico && colision) throw new ComercialError('seleccionar_negociacion',422);
                   completa = !colision;
                 }
               }
@@ -285,14 +310,31 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                 and scope_kind='commercial' and id<>${cmd.mensajeAvisoId} and created_at>=${pregunta.created_at} and created_at<=${m.created_at}
                 order by created_at desc,id desc limit 1`:[];
               const preguntaVigente = salida?.direction === 'out' && preguntaDeAviso(String(salida.text));
-              if (natural && (nuevoProyecto || (alternativa && !preguntaVigente))) throw new ComercialError('seleccionar_negociacion',422);
-              if (!m || salida?.direction !== 'out' ||
-                !(natural && preguntaVigente) && !respuestaAvisoEnContexto(String(m.text),String(salida.text))) {
+              const ambigua = Boolean(natural && (nuevoProyecto || (alternativa && !preguntaVigente)));
+              const rechazada = !m || salida?.direction !== 'out' ||
+                !(natural && preguntaVigente) && !respuestaAvisoEnContexto(String(m.text),String(salida.text));
+              if (diagnostico && !usado && (ambigua || rechazada)) {
+                const motivoNormal = ambigua ? nuevoProyecto ? 'proyecto_nuevo' : 'varias_cotizaciones_sin_pregunta_vigente'
+                  : !pregunta ? 'solicitud_previa_no_vigente' : salida?.direction !== 'out' ? 'salida_previa_no_inequivoca'
+                  : !preguntaVigente ? 'pregunta_de_aviso_no_reconocida' : 'respuesta_de_aviso_no_reconocida';
+                diagnosticoAviso = { aplicado: true, herramienta: 'comercial_solicitar_aprobacion',
+                  resultadoNormal: ambigua ? 'seleccionar_negociacion' : 'consentimiento_no_acreditado', motivoNormal,
+                  bloqueoEspontaneo: !natural ? 'autorizacion_no_reconocida' : nuevoProyecto ? 'proyecto_nuevo' : alternativa ? 'cotizacion_anterior' : null,
+                  condicionesOmitidas: [motivoNormal], consentimientoRegistrado:true, resultadoRegistro:'persistido',
+                  origenHash: createHash('sha256').update(`${cmd.conversationId}:${cmd.mensajeAvisoId}`).digest('hex') };
+              }
+              if (ambigua && !diagnosticoAviso) throw new ComercialError('seleccionar_negociacion',422);
+              if (rechazada && !diagnosticoAviso) {
                 throw new ComercialError('consentimiento_no_acreditado',422);
               }
             }
+            if (diagnostico && !usado && !diagnosticoAviso) diagnosticoAviso = {
+              aplicado:false, herramienta:'comercial_solicitar_aprobacion', resultadoNormal:'aceptado', motivoNormal:null,
+              condicionesOmitidas:[], consentimientoRegistrado:true, resultadoRegistro:'persistido',
+              origenHash:createHash('sha256').update(`${cmd.conversationId}:${cmd.mensajeAvisoId}`).digest('hex'),
+            };
           }else if(permiso.preguntaPendiente)return await estadoCotizacion(sql,actor.organizationId,q);
-          if(cmd.mensajeAvisoId) await sql`update comercial_evento set data=data||'{"estado":"pendiente","motivo":null}'::jsonb where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='aviso_aprobacion' and data->>'version'=${String(cmd.version)} and data->>'estado'='bloqueado' and data->>'motivo'='consentimiento_no_acreditado' and data->>'jobId' is null`;
+          if(cmd.mensajeAvisoId && !diagnosticoAviso) await sql`update comercial_evento set data=data||'{"estado":"pendiente","motivo":null}'::jsonb where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='aviso_aprobacion' and data->>'version'=${String(cmd.version)} and data->>'estado'='bloqueado' and data->>'motivo'='consentimiento_no_acreditado' and data->>'jobId' is null`;
           result = { cotizacionId: quoteId, version: cmd.version, estado: q.estado, consentimiento:{registrado:Boolean(cmd.mensajeAvisoId),preguntaPendiente:!cmd.mensajeAvisoId} };
         } else if (cmd.action === "aceptar") {
           if (q.estado !== "aprobada" || q.aprobada_version !== cmd.version) throw new ComercialError("falta_aprobacion");
@@ -345,8 +387,10 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
       }
     }
     // Motivos de aprobación y referencias de evidencia permanecen internos.
+    const eventoId = randomUUID();
+    if (diagnosticoAviso) Object.assign(result, { diagnosticoInc01:true, eventoId });
     await sql`insert into comercial_evento(id,organization_id,cotizacion_id,actor,action,data)
-      values(${randomUUID()},${actor.organizationId},${quoteId},${who},${cmd.action},${JSON.stringify(cmd.action==='preparar'?{...cmd,versionCreada:result.version}:cmd)}::text::jsonb)`;
+      values(${eventoId},${actor.organizationId},${quoteId},${who},${diagnosticoAviso?'diagnostico_consentimiento_inc01':cmd.action},${JSON.stringify(cmd.action==='preparar'?{...cmd,versionCreada:result.version}:diagnosticoAviso?{...cmd,diagnosticoInc01:diagnosticoAviso}:cmd)}::text::jsonb)`;
     await sql`insert into comercial_reintento(organization_id,actor,key,hash,result) values(${actor.organizationId},${who},${cmd.requestKey},${hash},${JSON.stringify(result)}::text::jsonb)`;
     return result;
   });

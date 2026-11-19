@@ -314,3 +314,23 @@ Antes de rotar imágenes, consultar avisos pendientes o inciertos. Para un traba
 Una sola prueba supervisada tras autorización: usar un contacto designado y un proyecto nuevo desechable. Pedir una cotización y autorizar el aviso en lenguaje natural. Confirmar que se creó o recuperó una sola cotización y que el ID, versión, mensaje de origen y consentimiento registrado coinciden en traza y evento persistido. En administración aprobar esa versión una vez. Verificar un evento y trabajo de aviso, el resultado de Zernio y el ACK real. Responder luego con una consulta de plazo, sin intención de contratar. Confirmar que el aviso no se duplica y que la prueba deja cero aceptaciones, pedidos y pagos. Detener ante divergencias de versión, resultados sin evidencia o envío incierto. Preservar los casos productivos anteriores.
 
 Validación candidata: 2 pruebas focalizadas de PostgreSQL/API, 4 del runtime comercial de Nea y 1 circuito local completo con OpenRouter y Zernio simulados. TypeScript y ESLint del alcance aprobados. Los mensajes válidos sin intención se rechazaron sin eventos de aceptación. Una confirmación breve al aviso vinculado y una aceptación explícita de alcance coincidente pasaron. El circuito dejó un consentimiento, un aviso con ACK simulado y un pedido intencional pendiente, sin duplicados. La prueba supervisada anterior comprueba la ausencia de pedido ante un mensaje informativo. Queda pendiente verificar WhatsApp real.
+## INC-01 · Consentimiento ordinario y aviso por WhatsApp
+
+El consentimiento espontáneo puede identificar la cotización por el concepto de una
+versión existente en la conversación. Las coincidencias múltiples requieren aclaración.
+Una respuesta breve continúa ligada a una pregunta de aviso vigente.
+
+El propietario o administrador puede revalidar un entrante desde el historial de la
+cotización. Se exige una evidencia diagnóstica vinculada, coincidencia de identidad,
+conversación y versión, y una autorización ordinaria inequívoca en el mensaje original
+de WhatsApp. El éxito agrega un evento ordinario que referencia el diagnóstico.
+
+El worker conserva un aviso por versión aprobada y diferencia cola, aceptación
+del proveedor, entrega, bloqueo, error y resultado incierto. La ventana de
+24 horas se comprueba al preparar y antes de enviar. Este aviso de texto se
+bloquea fuera de ventana. La actualización de Nea consume el estado de Vocero
+y distingue el recibo diagnóstico del consentimiento ordinario.
+
+**PROBADO en DEV** con PostgreSQL aislado y proveedor simulado. Pendiente el
+despliegue manual y la recepción en WhatsApp real. La evidencia productiva y
+la referencia del mensaje se conservan en el expediente local del propietario.

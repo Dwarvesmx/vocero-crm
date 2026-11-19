@@ -9,9 +9,12 @@ import {mxnACentavos,centavosAMxn} from '@/lib/mxn';
 import { urlDeConversacion } from "@/lib/avisos-sistema";
 import type { Comando, Producto, Propuesta, Snapshot } from "@/server/comercial/contracts";
 
-type Cotizacion = { id: string; conversation_id: string; contact_id: string; version: number; estado: string; snapshot: Snapshot };
+type Cotizacion = { id: string; conversation_id: string; contact_id: string; version: number; estado: string; snapshot: Snapshot; consentimiento?: {registrado:boolean}; aviso?: {estado:string} | null };
 type Pedido = { id: string; cotizacion_id: string; version: number; estado: string; enlace: string | null; evidencia: string | null };
-type Datos = { productos: Producto[]; cotizaciones: Cotizacion[]; pedidos: Pedido[]; eventos: {id:string;action:string;actor:string;data:unknown}[]; versiones: {version:number;snapshot:Snapshot}[] };
+type Evento = {id:string;cotizacion_id:string;action:string;actor:string;
+  data?:{version?:number;mensajeAvisoId?:string;motivo?:string;estado?:string};
+  estado_outbox?:string;estado_mensaje?:string;referencia_proveedor?:string;error_envio?:string};
+type Datos = { productos: Producto[]; cotizaciones: Cotizacion[]; pedidos: Pedido[]; eventos: Evento[]; versiones: {version:number;snapshot:Snapshot}[] };
 const dinero = (n: number | null) => n === null ? "Pendiente" : new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(n/100);
 const field = "w-full rounded-md border bg-background p-2 text-sm";
 export function ComercialPanel() {
@@ -94,6 +97,18 @@ export function ComercialPanel() {
         <a className="underline" href={urlDeConversacion(q.conversation_id)}>Abrir conversación</a>
         <DesgloseCotizacion snapshot={q.snapshot} estado={q.estado}/>
         <h3 className="font-semibold">Acciones de la versión</h3>
+        <p>Aviso por WhatsApp {q.consentimiento?.registrado ? 'autorizado por el cliente' : 'sin consentimiento ordinario confirmado'}.</p>
+        {q.aviso && <p>Estado del aviso: {q.aviso.estado}.</p>}
+        {detalle?.eventos.filter(e=>e.cotizacion_id===q.id && e.action==='aviso_aprobacion' && e.data?.version===q.version)
+          .map(e=><p key={e.id}>Evento {e.id} · {e.estado_outbox ?? 'sin trabajo de salida'}{e.estado_mensaje && ' · ' + e.estado_mensaje}
+            {e.referencia_proveedor && ' · referencia Zernio ' + e.referencia_proveedor}
+            {(e.error_envio || e.data?.motivo) && ' · ' + (e.error_envio || e.data?.motivo)}</p>)}
+        {q.estado==='pendiente' && !q.consentimiento?.registrado && detalle?.eventos.filter(e=>
+          e.action==='diagnostico_consentimiento_inc01' && e.cotizacion_id===q.id && e.data?.version===q.version && e.data.mensajeAvisoId
+        ).map(e=><Button key={e.id} type="button" variant="outline" disabled={busy} onClick={()=>enviar({
+          action:'solicitar_aprobacion',cotizacionId:q.id,conversationId:q.conversation_id,version:q.version,
+          mensajeAvisoId:e.data?.mensajeAvisoId,eventoDiagnosticoId:e.id,
+        })}>Revalidar autorización del evento {e.id.slice(0,8)}</Button>)}
         {q.estado === "pendiente" && <form className="flex flex-wrap gap-2" onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);enviar({action:"decidir",cotizacionId:q.id,conversationId:q.conversation_id,version:q.version,decision:f.get("decision"),motivo:f.get("motivo")});}}><Input name="motivo" placeholder="Motivo de decisión" aria-label={`Motivo ${q.id}`} required /><select name="decision" className={field}><option value="aprobar">Aprobar versión</option><option value="rechazar">Rechazar versión</option></select><Button disabled={busy}>Registrar decisión</Button></form>}
         </div>
         {navegacion.borradores[q.id] && <section hidden={navegacion.panel!=='editar'||navegacion.seleccion!==q.id} aria-label={`Editor de cotización ${q.id.slice(0,8)}`} onChangeCapture={()=>marcarSucio(q.id)} onClickCapture={e=>{if(e.target instanceof Element&&e.target.closest('button[type="button"]')&&!e.target.closest('[data-descartar]'))marcarSucio(q.id);}} className="min-w-0 space-y-3 rounded-lg border p-3"><h3 className="font-semibold">Modificar cotización {q.id.slice(0,8)} · versión {navegacion.borradores[q.id]!.version}</h3>{(navegacion.borradores[q.id]!.version!==q.version||q.estado==='aceptada')&&<p role="alert">La cotización cambió o fue aceptada. Tu borrador se conserva; revisa la versión antes de descartarlo y volver a editar.</p>}
@@ -102,7 +117,7 @@ export function ComercialPanel() {
         <div hidden={navegacion.panel==='editar'} className="space-y-3">
         {q.estado === "aprobada" && <form className="flex flex-wrap gap-2" onSubmit={e=>{e.preventDefault();enviar({action:"aceptar",conversationId:q.conversation_id,cotizacionId:q.id,version:q.version,mensajeId:new FormData(e.currentTarget).get("mensajeId")});}}><Input name="mensajeId" required placeholder="ID del mensaje de aceptación" aria-label="Mensaje de aceptación"/><Button disabled={busy}>Registrar aceptación</Button></form>}
         {q.estado === "aceptada" && <Button disabled={busy} onClick={()=>enviar({action:"contratar",conversationId:q.conversation_id,cotizacionId:q.id,version:q.version})}>Crear contratación</Button>}
-        <Button variant="outline" onClick={async()=>{const r=await fetch(`/api/comercial?cotizacionId=${q.id}`);if(r.ok)setDetalle(await r.json());}}>Ver historial {q.id.slice(0,8)}</Button>
+        <Button variant="outline" onClick={async()=>{const r=await fetch(`/api/comercial?cotizacionId=${q.id}`);if(r.ok){setDetalle(await r.json());await cargar();}}}>Ver historial {q.id.slice(0,8)}</Button>
         </div>
         </div>
       </article>)}

@@ -10,6 +10,18 @@ function tieneObjecion(texto: string): boolean {
 const aprobacion = /\bcuando\s+(?:(?:(?:(?:mi|la|esta|esa|tu)\s+)?(?:nueva\s+)?(?:cotizacion|propuesta)\s+)?(?:este|sea|quede)\s+(?:aprobada|autorizada)|(?:se\s+)?(?:aprueb[ae]n?|autoric[ae]n?)(?:\s+(?:(?:mi|la|esta|esa|tu)\s+)?(?:nueva\s+)?(?:cotizacion|propuesta))?)/u;
 const otraReferencia = /\b(?:otr[ao]|anterior|pasad[ao]|distint[ao]|vieja|v\s*\d+|version\s+\d+)\b|\b(?:cotizacion|propuesta)\s+#?(?:\d|[0-9a-f]{8}\b)/u;
 
+/** Extrae el objeto nombrado en una petición afirmativa de aviso. */
+export function objetoAvisoNatural(texto: string): string | null {
+  const frase = normalizar(texto);
+  if (tieneObjecion(frase) || otraReferencia.test(frase)) return null;
+  const partes = frase.match(/^(?:lukas,\s+)?(?:por favor,?\s+)?(?:quiero que me (?:avises|notifiques|escribas)|(?:te )?autorizo (?:expresamente )?(?:que me (?:avises|notifiques)|a (?:avisarme|notificarme))|avisame|notificame|escribeme)(?: por (?:este )?whatsapp)? cuando (?:se )?(?:aprueben?|autoricen?) (?:mi|la|esta|esa) (?:cotizacion|propuesta) (?:de|del|para) (?:(?:la|el|un|una) )?([\p{L}\p{N}][\p{L}\p{N} -]{1,100}?)(?: que (?:hicimos|preparamos|me preparaste|me enviaste))?[.!]?(?:\s*¿puedes registrar mi autorizacion\?)?$/u);
+  return partes?.[1]?.trim() ?? null;
+}
+
+export function coincideObjetoAviso(objeto: string, nombre: string): boolean {
+  return normalizar(nombre) === objeto;
+}
+
 /** Identifica una única pregunta de permiso, compartida por lectura y escritura. */
 export function preguntaDeAviso(texto: string): boolean {
   const preguntas = [...normalizar(texto).matchAll(/¿([^¿?]+)\?/gu)];

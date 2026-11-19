@@ -3,7 +3,7 @@ import type { TransactionSql } from "postgres";
 import { getSql } from "@/lib/db";
 import { calcular, ComercialError, comandoSchema, enlaceSeguro, exigirAdmin, productoSchema,
   type Actor, type Comando, type Producto, type Snapshot } from "./contracts";
-import { preguntaDeAviso, respuestaAvisoEnContexto, autorizacionAvisoNatural, referenciaAvisoExplicita } from "./consentimiento";
+import { preguntaDeAviso, respuestaAvisoEnContexto, autorizacionAvisoNatural, referenciaAvisoExplicita, objetoAvisoNatural, coincideObjetoAviso } from "./consentimiento";
 import semilla from "./catalogo-v3.json";
 import cambiosConciliacion from "./catalogo-conciliacion-v3.json";
 import { previsualizarCatalogo } from "./catalogo-preview";
@@ -37,7 +37,24 @@ async function consentimiento(sql: TransactionSql, org:string, quote:string, ver
 async function estadoCotizacion(sql:TransactionSql,org:string,q:Record<string,unknown>) {
   const [v]=await sql`select snapshot from comercial_version where organization_id=${org} and cotizacion_id=${String(q.id)} and version=${Number(q.version)}`;
   return {cotizacionId:String(q.id),negociacionId:String(q.id),version:Number(q.version),estado:String(q.estado),snapshot:v!.snapshot,
-    consentimiento:await consentimiento(sql,org,String(q.id),Number(q.version))};
+    consentimiento:await consentimiento(sql,org,String(q.id),Number(q.version)),
+    aviso:await estadoAviso(sql,org,String(q.id),Number(q.version))};
+}
+
+async function estadoAviso(sql: TransactionSql, org: string, quote: string, version: number) {
+  const [aviso] = await sql`select e.data->>'estado' as estado, j.status as outbox, m.status as mensaje
+    from comercial_evento e
+    left join zernio_whatsapp_outbox j on j.organization_id=e.organization_id and j.id=e.data->>'jobId'
+    left join message m on m.organization_id=j.organization_id and m.id=j.message_id
+    where e.organization_id=${org} and e.cotizacion_id=${quote} and e.action='aviso_aprobacion'
+      and e.data->>'version'=${String(version)} order by e.created_at desc limit 1`;
+  if (!aviso) return null;
+  if (aviso.outbox === 'cancelado') return {estado:'bloqueado'};
+  if (aviso.mensaje === 'read' || aviso.mensaje === 'delivered') return {estado:'entregado'};
+  if (aviso.outbox === 'incierto') return {estado:'incierto'};
+  if (aviso.outbox === 'fallido' || aviso.mensaje === 'failed') return {estado:'fallido'};
+  if (aviso.outbox === 'completado') return {estado:'enviado'};
+  return {estado:aviso.estado};
 }
 
 export async function comercialLeer(actor: Actor, conversationId?: string, cotizacionId?: string) {
@@ -51,7 +68,10 @@ export async function comercialLeer(actor: Actor, conversationId?: string, cotiz
       where q.organization_id=${actor.organizationId} and (${conversationId ?? null}::text is null or q.conversation_id=${conversationId ?? null})
       and (${cotizacionId ?? null}::text is null or q.id=${cotizacionId ?? null}) order by q.created_at desc limit 100`;
     if (cotizacionId && !cotizaciones.length) throw new ComercialError("no_encontrada",404);
-    for(const q of cotizaciones) q.consentimiento=await consentimiento(sql,actor.organizationId,String(q.id),Number(q.version));
+    for(const q of cotizaciones) {
+      q.consentimiento=await consentimiento(sql,actor.organizationId,String(q.id),Number(q.version));
+      q.aviso=await estadoAviso(sql,actor.organizationId,String(q.id),Number(q.version));
+    }
     const [activa]=conversationId ? await sql`select e.cotizacion_id from comercial_evento e join comercial_cotizacion q on q.id=e.cotizacion_id and q.organization_id=e.organization_id
       where e.organization_id=${actor.organizationId} and q.conversation_id=${conversationId} and e.action='preparar' and e.data->>'mensajeOrigenId' is not null order by e.created_at desc limit 1` : [];
     let negociacionActiva=activa?.cotizacion_id??(cotizaciones.length===1?cotizaciones[0]!.id:null);
@@ -69,8 +89,13 @@ export async function comercialLeer(actor: Actor, conversationId?: string, cotiz
       where p.organization_id=${actor.organizationId} and (${conversationId ?? null}::text is null or q.conversation_id=${conversationId ?? null})
       and (${cotizacionId ?? null}::text is null or q.id=${cotizacionId ?? null}) order by p.created_at desc limit 100`;
     // Historial interno no se devuelve al bot: puede contener motivos administrativos.
-    const eventos = actor.userId ? await sql`select * from comercial_evento where organization_id=${actor.organizationId}
-      and (${cotizacionId ?? null}::text is null or cotizacion_id=${cotizacionId ?? null}) order by created_at desc limit 100` : [];
+    const eventos = actor.userId ? await sql`select e.*, j.status as estado_outbox, j.attempts as intentos,
+      m.status as estado_mensaje, m.wa_message_id as referencia_proveedor, m.error as error_envio
+      from comercial_evento e
+      left join zernio_whatsapp_outbox j on e.action='aviso_aprobacion' and j.organization_id=e.organization_id and j.id=e.data->>'jobId'
+      left join message m on m.organization_id=j.organization_id and m.id=j.message_id
+      where e.organization_id=${actor.organizationId}
+      and (${cotizacionId ?? null}::text is null or e.cotizacion_id=${cotizacionId ?? null}) order by e.created_at desc limit 100` : [];
     const versiones = actor.userId && cotizacionId ? await sql`select version,snapshot,created_at from comercial_version
       where organization_id=${actor.organizationId} and cotizacion_id=${cotizacionId} order by version` : [];
     return { productos: actor.userId ? productos : productos.filter(p => p.activo), cotizaciones,
@@ -81,6 +106,7 @@ export async function comercialLeer(actor: Actor, conversationId?: string, cotiz
 export async function comercialEjecutar(actor: Actor, input: Comando) {
   habilitado();
   const cmd = comandoSchema.parse(input);
+  if (cmd.action === 'solicitar_aprobacion' && cmd.eventoDiagnosticoId) exigirAdmin(actor);
   if (actor.userId) exigirAdmin(actor);
   else if (!["preparar","solicitar_aprobacion","aceptar","contratar"].includes(cmd.action) ||
     actor.role !== "bot" || (cmd.action === "preparar" &&
@@ -231,12 +257,26 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
         } else if (cmd.action === "solicitar_aprobacion") {
           if (!['pendiente','aprobada'].includes(String(q.estado))) throw new ComercialError("estado_invalido");
           const permiso=await consentimiento(sql,actor.organizationId,quoteId,cmd.version);
+          const recuperacion = cmd.eventoDiagnosticoId;
+          if (recuperacion) {
+            const c = await contexto(sql, actor, cmd.conversationId);
+            const hashOrigen = createHash('sha256').update(cmd.conversationId + ':' + cmd.mensajeAvisoId).digest('hex');
+            const [evento] = await sql`select id from comercial_evento where id=${recuperacion}
+              and organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='diagnostico_consentimiento_inc01'
+              and data->>'conversationId'=${cmd.conversationId} and data->>'version'=${String(cmd.version)}
+              and data->>'mensajeAvisoId'=${cmd.mensajeAvisoId ?? null}
+              and data->'diagnosticoInc01'->>'resultadoRegistro'='persistido'
+              and data->'diagnosticoInc01'->>'origenHash'=${hashOrigen}`;
+            if (!evento || c.contact_id !== q.contact_id) throw new ComercialError('evidencia_diagnostica_invalida',422);
+          }
           const alcance = process.env.INC01_DIAGNOSTICO_ACTIVO === 'true' && actor.role === 'bot' && !actor.userId &&
             actor.organizationId === 'org_cp8uoa1ukrhkgtv5kix0' && q.contact_id === 'ct_1nldr78yp983ivg9x7jt' &&
             cmd.conversationId === 'cv_23blpiykaljo7xnuwywg' && quoteId === '7cca677e-38ab-4395-8386-6df9435c0da2' &&
             cmd.version === 1 && q.estado === 'pendiente';
           if(permiso.registrado)return {...await estadoCotizacion(sql,actor.organizationId,q),consentimiento:permiso};
           if (cmd.mensajeAvisoId) {
+            const c = await contexto(sql, actor, cmd.conversationId);
+            if (c.contact_id !== q.contact_id) throw new ComercialError('consentimiento_no_acreditado',422);
             const [origenVinculado]=await sql`select cotizacion_id,data->>'versionCreada' as version from comercial_evento where organization_id=${actor.organizationId} and action='preparar'
               and data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and data->>'versionCreada' is not null order by created_at desc limit 1`;
             if(origenVinculado && origenVinculado.cotizacion_id!==quoteId)throw new ComercialError('consentimiento_de_otra_negociacion',422);
@@ -245,13 +285,13 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
             const [m] = await sql`select text,created_at,wa_message_id from message where organization_id=${actor.organizationId}
               and conversation_id=${cmd.conversationId} and id=${cmd.mensajeAvisoId} and direction='in'
               and scope_kind='commercial' and created_at<=clock_timestamp() and (created_at>=${v!.created_at} or exists(select 1 from comercial_evento origen where origen.organization_id=${actor.organizationId} and origen.cotizacion_id=${quoteId} and origen.action='preparar' and origen.data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and origen.data->>'versionCreada'=${String(cmd.version)}))`;
-            const diagnostico = Boolean(alcance && m?.wa_message_id &&
-              (await contexto(sql, actor, cmd.conversationId)).contact_id === q.contact_id);
+            if (recuperacion && !m?.wa_message_id) throw new ComercialError('evidencia_diagnostica_invalida',422);
+            const diagnostico = Boolean(alcance && m?.wa_message_id);
             const [usado] = diagnostico ? await sql`select id from comercial_evento
               where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='diagnostico_consentimiento_inc01'
                 and data->>'version'=${String(cmd.version)} and data->>'mensajeAvisoId'=${cmd.mensajeAvisoId} limit 1` : [];
             if (usado) return {cotizacionId:quoteId,version:cmd.version,estado:q.estado,
-              consentimiento:{registrado:true,preguntaPendiente:false},diagnosticoInc01:true,eventoId:usado.id};
+              consentimiento:{registrado:false,preguntaPendiente:false},diagnosticoInc01:true,eventoId:usado.id};
             if (revalidarDiagnostico) return estadoCotizacion(sql,actor.organizationId,q);
             // Sin el vínculo de creación, una frase espontánea no elige entre varias cotizaciones.
             const natural = m ? autorizacionAvisoNatural(String(m.text)) : null;
@@ -265,6 +305,21 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                 and text !~* '(no[[:space:]]+(es[[:space:]]+)?(un[[:space:]]+)?(proyecto[[:space:]]+nuevo|nuevo[[:space:]]+proyecto|otro[[:space:]]+proyecto))'
               limit 1` : [];
             let completa = Boolean(natural && !alternativa && !nuevoProyecto);
+            const objeto = m && objetoAvisoNatural(String(m.text));
+            if (m && objeto) {
+              // Usa la versión que existía al recibir el mensaje y sus conceptos congelados.
+              const candidatas = await sql`select c.id,version_en_origen.version,version_en_origen.snapshot
+                from comercial_cotizacion c join lateral (
+                  select version,snapshot from comercial_version where organization_id=c.organization_id
+                    and cotizacion_id=c.id and created_at<=${m.created_at} order by version desc limit 1
+                ) version_en_origen on true
+                where c.organization_id=${actor.organizationId} and c.conversation_id=${cmd.conversationId}`;
+              const coincide = candidatas.filter(({snapshot}) => (snapshot as Snapshot).conceptos
+                .some(({producto})=>coincideObjetoAviso(objeto,producto.nombre)));
+              if (coincide.length !== 1 || coincide[0]!.id !== quoteId) throw new ComercialError('seleccionar_negociacion',422);
+              if (coincide[0]!.version !== cmd.version) throw new ComercialError('consentimiento_no_acreditado',422);
+              completa = true;
+            }
             if (m && natural === 'vigente' && alternativa && !nuevoProyecto) {
               // Solo una preparación persistida puede anclar «vigente» entre varias propuestas.
               const activas = await sql`select distinct e.cotizacion_id,e.created_at from comercial_evento e
@@ -296,6 +351,7 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                 }
               }
             }
+            if (recuperacion && !completa) throw new ComercialError('consentimiento_no_acreditado',422);
             if(!completa){
               const [pregunta]=m?await sql`select e.created_at from comercial_evento e where e.organization_id=${actor.organizationId} and e.cotizacion_id=${quoteId}
                 and e.action='solicitar_aprobacion' and e.data->>'version'=${String(cmd.version)} and e.created_at<=${m.created_at}
@@ -323,14 +379,9 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
                 throw new ComercialError('consentimiento_no_acreditado',422);
               }
             }
-            if (diagnostico && !diagnosticoAviso) diagnosticoAviso = {
-              aplicado:false, herramienta:'comercial_solicitar_aprobacion', resultadoNormal:'aceptado', motivoNormal:null,
-              condicionesOmitidas:[], consentimientoRegistrado:true, resultadoRegistro:'persistido',
-              origenHash:createHash('sha256').update(`${cmd.conversationId}:${cmd.mensajeAvisoId}`).digest('hex'),
-            };
           }else if(permiso.preguntaPendiente)return await estadoCotizacion(sql,actor.organizationId,q);
           if(cmd.mensajeAvisoId && !diagnosticoAviso) await sql`update comercial_evento set data=data||'{"estado":"pendiente","motivo":null}'::jsonb where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='aviso_aprobacion' and data->>'version'=${String(cmd.version)} and data->>'estado'='bloqueado' and data->>'motivo'='consentimiento_no_acreditado' and data->>'jobId' is null`;
-          result = { cotizacionId: quoteId, version: cmd.version, estado: q.estado, consentimiento:{registrado:Boolean(cmd.mensajeAvisoId),preguntaPendiente:!cmd.mensajeAvisoId} };
+          result = { cotizacionId: quoteId, version: cmd.version, estado: q.estado, consentimiento:{registrado:Boolean(cmd.mensajeAvisoId && !diagnosticoAviso),preguntaPendiente:!cmd.mensajeAvisoId} };
         } else if (cmd.action === "aceptar") {
           if (q.estado !== "aprobada" || q.aprobada_version !== cmd.version) throw new ComercialError("falta_aprobacion");
           const [m] = await sql`select m.id,m.text,m.created_at from message m join comercial_version v on v.organization_id=m.organization_id

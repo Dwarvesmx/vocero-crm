@@ -13,7 +13,8 @@ import { getDb, getSql } from "@/lib/db";
 import { comercialEjecutar, comercialLeer } from "@/server/comercial/service";
 import { comandoSchema, type Actor, type Comando, type Producto, type Snapshot } from "@/server/comercial/contracts";
 import { GET as botGet, POST as botPost } from "@/app/api/bot/comercial/route";
-import { prepararAvisosComerciales, autorizarIntentoAviso } from "@/server/comercial/avisos";
+import { prepararAvisosComerciales, motivoBloqueoAviso } from "@/server/comercial/avisos";
+import { applyStatusUpdate } from "@/server/inbox/status";
 
 describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL descartable",()=>{
   const owner: Actor = {organizationId:"comercial-test",userId:"owner",role:"owner"};
@@ -54,7 +55,8 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await sql`insert into organization(id,name) values(${org},'Piloto sintético')`;
     await sql`insert into contact(id,organization_id,wa_identity,name) values(${contacto},${org},${contacto},'Sintético')`;
     await sql`insert into conversation(id,organization_id,contact_id) values(${conversationId},${org},${contacto})`;
-    const base = await preparar();
+    await call(owner,{action:'catalogo',producto:{...producto,id:'web-piloto',nombre:'Página web'}});
+    const base = await preparar({conceptos:[{productoId:'web-piloto',cantidad:1}]});
     await sql`insert into comercial_cotizacion(id,organization_id,conversation_id,contact_id,version,estado)
       values(${cotizacionId},${org},${conversationId},${contacto},1,'pendiente')`;
     await sql`insert into comercial_version(id,organization_id,cotizacion_id,version,snapshot)
@@ -85,12 +87,12 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       await rechazado(intentar(await mensaje(texto,false)));
       const requestKey = randomUUID();
       const recibos = await Promise.all([intentar(id,{requestKey}),intentar(id,{requestKey}),intentar(id)]);
-      expect(recibos[0]).toMatchObject({consentimiento:{registrado:true},diagnosticoInc01:true});
+      expect(recibos[0]).toMatchObject({consentimiento:{registrado:false},diagnosticoInc01:true});
       expect(recibos[1]).toEqual(recibos[0]);
       expect(recibos[2]).toEqual(recibos[0]);
       const otroId = await mensaje('Segundo mensaje sintético, sin frase acordada.');
       const segundo = await intentar(otroId);
-      expect(segundo).toMatchObject({consentimiento:{registrado:true},diagnosticoInc01:true});
+      expect(segundo).toMatchObject({consentimiento:{registrado:false},diagnosticoInc01:true});
       expect(segundo.eventoId).not.toBe(recibos[0]!.eventoId);
       vi.stubEnv('INC01_DIAGNOSTICO_ACTIVO','false');
       await rechazado(intentar(id));
@@ -103,6 +105,29 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       expect(estado.eventos.find(e=>e.id===recibos[0]!.eventoId)).toMatchObject({action:'diagnostico_consentimiento_inc01',data:{version:1,mensajeAvisoId:id,
         diagnosticoInc01:{aplicado:true,resultadoNormal:'consentimiento_no_acreditado',motivoNormal:'solicitud_previa_no_vigente',consentimientoRegistrado:true,
           origenHash:createHash('sha256').update(`${conversationId}:${id}`).digest('hex')}}});
+      const admin = {...owner,organizationId:org};
+      await rechazado(call(admin,{...cmd,mensajeAvisoId:id,eventoDiagnosticoId:recibos[0]!.eventoId}));
+      const natural = await mensaje('Lukas, quiero que me avises por este WhatsApp cuando aprueben la cotización de la página web que hicimos. ¿Puedes registrar mi autorización?');
+      // Representa la fila histórica emitida antes del reconocimiento ordinario.
+      const anterior = String(recibos[0]!.eventoId);
+      const evidencia = randomUUID();
+      const hash = createHash('sha256').update(conversationId + ':' + natural).digest('hex');
+      await sql`insert into comercial_evento(id,organization_id,cotizacion_id,actor,action,data)
+        select ${evidencia},organization_id,cotizacion_id,actor,action,
+          jsonb_set(jsonb_set(data,'{mensajeAvisoId}',to_jsonb(${natural}::text)),'{diagnosticoInc01,origenHash}',to_jsonb(${hash}::text))
+        from comercial_evento where id=${anterior}`;
+      const recuperar = {...cmd,mensajeAvisoId:natural,eventoDiagnosticoId:evidencia};
+      await expect(call(actor,recuperar)).rejects.toMatchObject({code:'sin_permiso'});
+      await expect(call(admin,{...recuperar,mensajeAvisoId:id})).rejects.toMatchObject({code:'evidencia_diagnostica_invalida'});
+      for(const resultado of await Promise.all([call(admin,recuperar),call(admin,recuperar)])) {
+        expect(resultado).toMatchObject({estado:'pendiente',consentimiento:{registrado:true}});
+      }
+      const final = await comercialLeer(admin,conversationId,cotizacionId);
+      expect(final.eventos.filter(e=>e.action==='solicitar_aprobacion')).toMatchObject([
+        {data:{mensajeAvisoId:natural,eventoDiagnosticoId:evidencia,version:1}},
+      ]);
+      expect(final.eventos.some(e=>e.action==='aviso_aprobacion')).toBe(false);
+      expect(final.pedidos).toHaveLength(0);
     } finally { vi.unstubAllEnvs(); }
   });
   it('INC-01 resuelve la propuesta de aviso y persiste un solo consentimiento por versión', async () => {
@@ -119,6 +144,8 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
 
     const ambiguo = await mensaje('Cuando aprueben mi propuesta, mándame un WhatsApp.');
     await expect(aviso(actual.cotizacionId, ambiguo)).rejects.toMatchObject({ code: 'seleccionar_negociacion' });
+    const homonimas = await mensaje('Quiero que me avises por WhatsApp cuando aprueben la cotización del servicio sintético.');
+    await expect(aviso(actual.cotizacionId, homonimas)).rejects.toMatchObject({ code: 'seleccionar_negociacion' });
     for (const texto of ['Claro', 'No me avises cuando aprueben la propuesta actual',
       'Avísame cuando aprueben la propuesta actual si mantienen el precio']) {
       await expect(aviso(actual.cotizacionId, await mensaje(texto))).rejects.toMatchObject({ code: 'consentimiento_no_acreditado' });
@@ -475,7 +502,7 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect((await comercialLeer(owner)).productos.find(p=>p.id==='estandar')!.unico).toBe(149900);
     await expect(call(bot,{action:'revisar',...ref,version:2,propuesta:{conceptos:[{productoId:'estandar',cantidad:1}],promocion}})).rejects.toMatchObject({code:'sin_permiso'});
   });
-  it("Aviso durable: consentimiento, duplicados, ventana y continuidad hasta pedido pendiente",async()=>{
+  it("INC-01 aviso durable: consentimiento, duplicados, ventana y continuidad hasta pedido pendiente",async()=>{
     process.env.ZERNIO_WHATSAPP_ENABLED='true';
     await sql`insert into zernio_whatsapp_credentials(id,organization_id,account_ref,token_cipher,token_iv,token_tag,secret_cipher,secret_iv,secret_tag,enabled)
       values('cred-aviso',${owner.organizationId},'cuenta-sintetica','x','x','x','x','x','x',true)`;
@@ -511,16 +538,22 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     await prepararAvisosComerciales(); await prepararAvisosComerciales();
     const jobs=await sql`select * from zernio_whatsapp_outbox where request_key like ${'comercial-aviso:'+q.cotizacionId+':%'}`;
     expect(jobs).toHaveLength(1);
-    expect(await autorizarIntentoAviso(jobs[0]!.id)).toBe(true);
+    expect(await motivoBloqueoAviso(jobs[0]!.id)).toBeNull();
     await sql`update conversation set last_inbound_at=clock_timestamp()-interval '25 hours' where id='conv'`;
-    expect(await autorizarIntentoAviso(jobs[0]!.id)).toBe(false);
+    expect(await motivoBloqueoAviso(jobs[0]!.id)).toBe('ventana_cerrada_sin_plantilla');
     await sql`update conversation set last_inbound_at=clock_timestamp(),ai_enabled=false where id='conv'`;
-    expect(await autorizarIntentoAviso(jobs[0]!.id)).toBe(false);
+    expect(await motivoBloqueoAviso(jobs[0]!.id)).toBe('atencion_humana');
     await sql`update conversation set ai_enabled=true where id='conv'`;
     await barrerEnviosWhatsAppZernio();
     const [enviado]=await sql`select j.status,m.wa_message_id from zernio_whatsapp_outbox j join message m on m.id=j.message_id where j.id=${jobs[0]!.id}`;
     expect(enviado).toMatchObject({status:'completado',wa_message_id:'wamid-aviso-sintetico'});
+    expect((await comercialLeer(owner,'conv',q.cotizacionId)).cotizaciones[0]).toMatchObject({aviso:{estado:'enviado'}});
     await barrerEnviosWhatsAppZernio();
+    expect(vi.mocked(enviarTextoWhatsAppZernio).mock.calls.filter(([envio])=>envio.idempotencyKey===jobs[0]!.request_key)).toHaveLength(1);
+    await applyStatusUpdate(owner.organizationId,{id:'wamid-aviso-sintetico',status:'delivered',timestamp:String(Math.floor(Date.now()/1000))});
+    const entregada=await comercialLeer(owner,'conv',q.cotizacionId);
+    expect(entregada.cotizaciones[0]).toMatchObject({aviso:{estado:'entregado'}});
+    expect(entregada.pedidos).toHaveLength(0);
     await sql`insert into message(id,organization_id,conversation_id,direction,text) values('accept-aviso',${owner.organizationId},'conv','in','Va')`;
     await call(bot,{action:'aceptar',...ref,mensajeId:'accept-aviso'});
     const pedido=await call(bot,{action:'contratar',...ref});
@@ -531,7 +564,7 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     const otra=await preparar({conceptos:[{productoId:'estandar',cantidad:1}],especial:'Aviso incierto'});
     const r2={conversationId:'conv',cotizacionId:otra.cotizacionId,version:1};
     await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-2',${owner.organizationId},'conv','in','Sí, avísame cuando mi cotización esté autorizada')`;
-    await expect(call(bot,{action:'solicitar_aprobacion',...r2,mensajeAvisoId:'consent-2'})).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
+    await expect(call(bot,{action:'solicitar_aprobacion',...r2,mensajeAvisoId:'consent-2'})).rejects.toMatchObject({code:'seleccionar_negociacion'});
     await call(bot,{action:'solicitar_aprobacion',...r2});
     await sql`insert into message(id,organization_id,conversation_id,direction,text) values
       ('pregunta-2',${owner.organizationId},'conv','out','¿Quieres que te avise por este WhatsApp cuando aprueben tu cotización?')`;
@@ -568,6 +601,14 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     expect(encolado?.data).toMatchObject({estado:'encolado'});
     const trabajos=await sql`select id from zernio_whatsapp_outbox where request_key like ${'comercial-aviso:'+tardia.cotizacionId+':%'}`;
     expect(trabajos).toHaveLength(1);
+    await sql`update conversation set last_inbound_at=clock_timestamp()-interval '25 hours' where id='conv'`;
+    await barrerEnviosWhatsAppZernio();
+    const cerrada=await comercialLeer(owner,'conv',tardia.cotizacionId);
+    expect(cerrada.cotizaciones[0]).toMatchObject({aviso:{estado:'bloqueado'}});
+    expect(cerrada.eventos.find(e=>e.action==='aviso_aprobacion')).toMatchObject({
+      estado_outbox:'cancelado',error_envio:'ventana_cerrada_sin_plantilla',
+    });
+    expect(vi.mocked(enviarTextoWhatsAppZernio).mock.calls).toHaveLength(llamadas);
     process.env.ZERNIO_WHATSAPP_ENABLED='false';
   });
 });

@@ -29,3 +29,19 @@ it('consentimiento espontáneo reconoce la frase original y excluye negativas y 
  expect(autorizacionAvisoCompleta(frase+' solo si acepto primero.')).toBe(false);
  expect(autorizacionAvisoCompleta(frase+'. Pero no me avises todavía.')).toBe(false);
 });
+
+const preguntaNatural='¿Quieres que te avise por este WhatsApp cuando aprueben tu cotización?';
+it.each(['Claro','Va','Porfa','Me avisas','Órale','Está bien'])('acredita %s solo ante pregunta contextual',texto=>{
+ expect(respuestaAvisoEnContexto(texto,preguntaNatural)).toBe(true);
+ expect(respuestaAvisoEnContexto(texto,'¿Aceptas el precio de la cotización?')).toBe(false);
+ expect(respuestaAvisoEnContexto(texto,'¿Quieres que te avise cuando aprueben tu cotización o prefieres contratar ahora?')).toBe(false);
+ expect(autorizacionAvisoCompleta(texto)).toBe(false);
+});
+
+it('reconoce la autorización autónoma de la segunda prueba sin extrapolar a otro objeto',()=>{
+ const texto='Te autorizo expresamente a avisarme por este WhatsApp cuando esta nueva cotización sea aprobada';
+ expect(autorizacionAvisoCompleta(texto)).toBe(true);
+ expect(autorizacionAvisoCompleta(texto.replace('este WhatsApp','correo'))).toBe(false);
+ expect(autorizacionAvisoCompleta(texto.replace('esta nueva','otra'))).toBe(false);
+ expect(autorizacionAvisoCompleta(texto+' si mantienes el precio')).toBe(false);
+});

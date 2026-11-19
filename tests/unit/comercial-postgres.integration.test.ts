@@ -154,6 +154,21 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       await expect(call(bot,{action:"aceptar",...ref,mensajeId:id})).rejects.toMatchObject({code:"evidencia_aceptacion_invalida"});
     }
     expect((await comercialLeer(owner,undefined,q.cotizacionId)).pedidos).toHaveLength(0);
+    for (const texto of ['Gracias, ¿cuánto tarda?', 'Sí', 'Claro', 'Sí, avísame por WhatsApp',
+      'Acepto esta cotización si bajas el precio', 'No acepto esta cotización', 'Acepto esta propuesta de un seguro']) {
+      const mensaje=randomUUID();
+      await sql`insert into message(id,organization_id,conversation_id,direction,text)
+        values(${mensaje},${owner.organizationId},'conv','in',${texto})`;
+      const response=await botPost(new Request('http://127.0.0.1/api/bot/comercial',{
+        method:'POST',headers:{'x-api-key':process.env.BOT_API_KEY!,'content-type':'application/json'},
+        body:JSON.stringify({action:'aceptar',...ref,mensajeId:mensaje,requestKey:randomUUID()}),
+      }));
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({error:{code:'intencion_aceptacion_no_acreditada'}});
+    }
+    const sinAceptar=await comercialLeer(owner,undefined,q.cotizacionId);
+    expect(sinAceptar.cotizaciones[0]).toMatchObject({estado:'aprobada',accepted_message_id:null});
+    expect(sinAceptar.eventos.filter(e=>e.action==='aceptar')).toHaveLength(0);
     await expect(call(bot,{action:"contratar",...ref})).rejects.toMatchObject({code:"falta_aceptacion"});
     const id=randomUUID();await sql`insert into message(id,organization_id,conversation_id,direction,text,scope_kind) values(${id},${owner.organizationId},'conv','in','Sí, acepto la propuesta aprobada','commercial')`;
     const server=createServer(async(req,res)=>{
@@ -364,10 +379,10 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
       values('cred-aviso',${owner.organizationId},'cuenta-sintetica','x','x','x','x','x','x',true)`;
     await sql`update conversation set channel='whatsapp',channel_thread_ref='hilo-sintetico',last_inbound_at=clock_timestamp(),ai_enabled=true where id='conv'`;
     const origen='consent-aviso';
-    const texto='Quiero cotizar un catálogo para 12 productos. También te autorizo expresamente a avisarme por este WhatsApp cuando la cotización esté aprobada.';
+    const texto='Quiero cotizar un catálogo para 12 productos para un proyecto nuevo. También te autorizo expresamente a avisarme por este WhatsApp cuando la cotización esté aprobada.';
     await sql`insert into message(id,organization_id,conversation_id,direction,text,created_at)
       values(${origen},${owner.organizationId},'conv','in',${texto},clock_timestamp()-interval '1 second')`;
-    const q=await call(bot,{action:'preparar',conversationId:'conv',mensajeOrigenId:origen,
+    const q=await call(bot,{action:'preparar',conversationId:'conv',mensajeOrigenId:origen,nuevaNegociacion:true,
       propuesta:{conceptos:[{productoId:'estandar',cantidad:1}],especial:'Catálogo sintético'}});
     const ref={conversationId:'conv',cotizacionId:q.cotizacionId,version:1};
     expect(q.version).toBe(1);
@@ -404,7 +419,7 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     const [enviado]=await sql`select j.status,m.wa_message_id from zernio_whatsapp_outbox j join message m on m.id=j.message_id where j.id=${jobs[0]!.id}`;
     expect(enviado).toMatchObject({status:'completado',wa_message_id:'wamid-aviso-sintetico'});
     await barrerEnviosWhatsAppZernio();
-    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('accept-aviso',${owner.organizationId},'conv','in','Acepto esta propuesta')`;
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('accept-aviso',${owner.organizationId},'conv','in','Va')`;
     await call(bot,{action:'aceptar',...ref,mensajeId:'accept-aviso'});
     const pedido=await call(bot,{action:'contratar',...ref});
     expect(pedido).toMatchObject({pedido:{estado:'pendiente',enlace:null}});
@@ -414,7 +429,13 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     const otra=await preparar({conceptos:[{productoId:'estandar',cantidad:1}],especial:'Aviso incierto'});
     const r2={conversationId:'conv',cotizacionId:otra.cotizacionId,version:1};
     await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-2',${owner.organizationId},'conv','in','Sí, avísame cuando mi cotización esté autorizada')`;
-    await call(bot,{action:'solicitar_aprobacion',...r2,mensajeAvisoId:'consent-2'});
+    await expect(call(bot,{action:'solicitar_aprobacion',...r2,mensajeAvisoId:'consent-2'})).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
+    await call(bot,{action:'solicitar_aprobacion',...r2});
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values
+      ('pregunta-2',${owner.organizationId},'conv','out','¿Quieres que te avise por este WhatsApp cuando aprueben tu cotización?')`;
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values
+      ('respuesta-2',${owner.organizationId},'conv','in','Claro')`;
+    expect(await call(bot,{action:'solicitar_aprobacion',...r2,mensajeAvisoId:'respuesta-2'})).toMatchObject({consentimiento:{registrado:true}});
     await call(owner,{action:'decidir',...r2,decision:'aprobar',motivo:'Revisado'});
     vi.mocked(enviarTextoWhatsAppZernio).mockRejectedValueOnce(new Error('Timeout sintético'));
     await barrerEnviosWhatsAppZernio();
@@ -431,7 +452,10 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     const [bloqueado]=await avisoTardio();
     expect(bloqueado?.data).toMatchObject({estado:'bloqueado',motivo:'consentimiento_no_acreditado'});
     expect(bloqueado?.data.jobId).toBeUndefined();
-    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-tardio',${owner.organizationId},'conv','in','Sí, avísame cuando mi cotización esté autorizada')`;
+    await call(bot,{action:'solicitar_aprobacion',...refTardia});
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values
+      ('pregunta-tardia',${owner.organizationId},'conv','out','¿Te aviso por este WhatsApp cuando tu cotización esté aprobada?')`;
+    await sql`insert into message(id,organization_id,conversation_id,direction,text) values('consent-tardio',${owner.organizationId},'conv','in','Porfa')`;
     await call(bot,{action:'solicitar_aprobacion',...refTardia,mensajeAvisoId:'consent-tardio'});
     const reactivado=await avisoTardio();
     expect(reactivado).toHaveLength(1);

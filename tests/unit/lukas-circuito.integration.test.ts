@@ -191,7 +191,7 @@ it.skipIf(process.env.COMERCIAL_TEST!=='1')('Lukas: circuito real único con Pos
     let state=await request('/api/comercial?conversationId='+conv,undefined,true);
     expect(state.cotizaciones).toHaveLength(2);expect(state.eventos.filter((e:{action:string})=>e.action==='solicitar_aprobacion')).toHaveLength(0);
     checks.push({transicion:'informacion',cotizacionesNuevas:0,consentimientos:0});
-    phase='cotizacion';const second=envelope('cotizar','Quiero una cotización para mi lavandería con servicios, precios y solicitudes de cita. Autorizo que me avises por este WhatsApp cuando esté aprobada. ¿Cuánto cuesta y cómo contrato?');
+    phase='cotizacion';const second=envelope('cotizar','Quiero una cotización para mi lavandería con servicios, precios y solicitudes de cita. Te autorizo expresamente a avisarme por este WhatsApp cuando esta nueva cotización sea aprobada. ¿Cuánto cuesta y cómo contrato?');
     await turn(second);
     state=await request('/api/comercial?conversationId='+conv,undefined,true);
     expect(state.cotizaciones).toHaveLength(3);quote=state.cotizaciones.find((q:{id:string})=>!previousIds.includes(q.id)).id;
@@ -226,7 +226,8 @@ it.skipIf(process.env.COMERCIAL_TEST!=='1')('Lukas: circuito real único con Pos
     checks.push({transicion:'aprobacion_outbox_ack',approval,jobs,estadoFinal:delivered!.status});
     phase='contratacion';await turn(envelope('aceptar','Sí, acepto explícitamente la propuesta aprobada de mi lavandería y quiero contratarla.'));
     state=await request('/api/comercial?conversationId='+conv,undefined,true);
-    expect(state.pedidos).toHaveLength(1);expect(state.pedidos[0]).toMatchObject({cotizacion_id:quote,version:1,estado:'pendiente',enlace:null,evidencia:null});
+    expect(state.pedidos,JSON.stringify(calls.filter(call=>call.action==='aceptar'||call.action==='contratar'))).toHaveLength(1);
+    expect(state.pedidos[0]).toMatchObject({cotizacion_id:quote,version:1,estado:'pendiente',enlace:null,evidencia:null});
     expect(state.cotizaciones).toHaveLength(3);
     expect(state.cotizaciones.filter((q:{id:string;version:number})=>previousIds.includes(q.id)).every((q:{version:number})=>q.version===1)).toBe(true);
     const consent=state.eventos.filter((e:{action:string;cotizacion_id:string;data:{mensajeAvisoId?:string}})=>e.action==='solicitar_aprobacion'&&e.cotizacion_id===quote&&e.data.mensajeAvisoId);expect(consent).toHaveLength(1);

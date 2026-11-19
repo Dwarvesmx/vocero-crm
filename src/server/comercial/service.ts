@@ -3,10 +3,11 @@ import type { TransactionSql } from "postgres";
 import { getSql } from "@/lib/db";
 import { calcular, ComercialError, comandoSchema, enlaceSeguro, exigirAdmin, productoSchema,
   type Actor, type Comando, type Producto, type Snapshot } from "./contracts";
-import { respuestaAvisoEnContexto, autorizacionAvisoCompleta } from "./consentimiento";
+import { preguntaDeAviso, respuestaAvisoEnContexto, autorizacionAvisoCompleta } from "./consentimiento";
 import semilla from "./catalogo-v3.json";
 import cambiosConciliacion from "./catalogo-conciliacion-v3.json";
 import { previsualizarCatalogo } from "./catalogo-preview";
+import { interpretarAceptacion } from "./aceptacion";
 
 export const comercialEnabled = () => process.env.COMERCIAL_V1_ENABLED === "true";
 function habilitado() { if (!comercialEnabled()) throw new ComercialError("no_disponible",404); }
@@ -62,7 +63,7 @@ export async function comercialLeer(actor: Actor, conversationId?: string, cotiz
     if(conversationId){
       const [salida]=await sql`select text from message where organization_id=${actor.organizationId} and conversation_id=${conversationId} and direction='out' and scope_kind='commercial' order by created_at desc limit 1`;
       const [pregunta]=await sql`select cotizacion_id,data from comercial_evento where organization_id=${actor.organizationId} and action='solicitar_aprobacion' and data->>'conversationId'=${conversationId} order by created_at desc limit 1`;
-      for(const q of cotizaciones) q.preguntaAvisoActual=Boolean(pregunta?.cotizacion_id===q.id && pregunta?.data?.version===q.version && /\baviso\b.*(?:cotizaci[oó]n|propuesta).*(?:autorizada|aprobada)/iu.test(String(salida?.text??'')));
+      for(const q of cotizaciones) q.preguntaAvisoActual=Boolean(!q.consentimiento.registrado && pregunta?.cotizacion_id===q.id && pregunta?.data?.version===q.version && preguntaDeAviso(String(salida?.text??'')));
     }
     const pedidos = await sql`select p.* from comercial_pedido p join comercial_cotizacion q on q.id=p.cotizacion_id and q.organization_id=p.organization_id
       where p.organization_id=${actor.organizationId} and (${conversationId ?? null}::text is null or q.conversation_id=${conversationId ?? null})
@@ -229,36 +230,61 @@ export async function comercialEjecutar(actor: Actor, input: Comando) {
           const permiso=await consentimiento(sql,actor.organizationId,quoteId,cmd.version);
           if(permiso.registrado)return {...await estadoCotizacion(sql,actor.organizationId,q),consentimiento:permiso};
           if (cmd.mensajeAvisoId) {
-            const [origenVinculado]=await sql`select cotizacion_id from comercial_evento where organization_id=${actor.organizationId} and action='preparar'
+            const [origenVinculado]=await sql`select cotizacion_id,data->>'versionCreada' as version from comercial_evento where organization_id=${actor.organizationId} and action='preparar'
               and data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and data->>'versionCreada' is not null order by created_at desc limit 1`;
             if(origenVinculado && origenVinculado.cotizacion_id!==quoteId)throw new ComercialError('consentimiento_de_otra_negociacion',422);
+            if(origenVinculado && origenVinculado.version!==String(cmd.version))throw new ComercialError('consentimiento_no_acreditado',422);
 
             const [m] = await sql`select text,created_at from message where organization_id=${actor.organizationId}
               and conversation_id=${cmd.conversationId} and id=${cmd.mensajeAvisoId} and direction='in'
               and scope_kind='commercial' and created_at<=clock_timestamp() and (created_at>=${v!.created_at} or exists(select 1 from comercial_evento origen where origen.organization_id=${actor.organizationId} and origen.cotizacion_id=${quoteId} and origen.action='preparar' and origen.data->>'mensajeOrigenId'=${cmd.mensajeAvisoId} and origen.data->>'versionCreada'=${String(cmd.version)}))`;
-            const completa=m&&autorizacionAvisoCompleta(String(m.text));
+            // Sin el vínculo de creación, una frase espontánea no elige entre varias cotizaciones.
+            const [alternativa]=m&&!origenVinculado?await sql`select 1 from comercial_cotizacion
+              where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
+                and id<>${quoteId} and created_at<=${m.created_at} limit 1`:[];
+            const completa=m&&!alternativa&&autorizacionAvisoCompleta(String(m.text));
             if(!completa){
-              const [pregunta]=m?await sql`select e.id from comercial_evento e where e.organization_id=${actor.organizationId} and e.cotizacion_id=${quoteId}
+              const [pregunta]=m?await sql`select e.created_at from comercial_evento e where e.organization_id=${actor.organizationId} and e.cotizacion_id=${quoteId}
                 and e.action='solicitar_aprobacion' and e.data->>'version'=${String(cmd.version)} and e.created_at<=${m.created_at}
                 and not exists(select 1 from comercial_evento otra where otra.organization_id=e.organization_id and otra.action='solicitar_aprobacion'
                   and otra.data->>'conversationId'=${cmd.conversationId} and otra.created_at>e.created_at and otra.created_at<=${m.created_at}) limit 1`:[];
-              const [salida]=m?await sql`select text from message where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
-                and scope_kind='commercial' and direction='out' and created_at>=${v!.created_at} and created_at<=${m.created_at} order by created_at desc limit 1`:[];
-              if(!m||!pregunta||!respuestaAvisoEnContexto(String(m.text),String(salida?.text??''))||
-                !/(?=.*(?:avis|mensaje))(?=.*(?:cotizaci[oó]n|propuesta|autoriza|aprueb))/iu.test(String(salida?.text??'')))throw new ComercialError('consentimiento_no_acreditado',422);
+              const [salida]=m&&pregunta?await sql`select text,direction from message where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
+                and scope_kind='commercial' and id<>${cmd.mensajeAvisoId} and created_at>=${pregunta.created_at} and created_at<=${m.created_at}
+                order by created_at desc,id desc limit 1`:[];
+              if(!m||salida?.direction!=='out'||!respuestaAvisoEnContexto(String(m.text),String(salida.text)))throw new ComercialError('consentimiento_no_acreditado',422);
             }
           }else if(permiso.preguntaPendiente)return await estadoCotizacion(sql,actor.organizationId,q);
           if(cmd.mensajeAvisoId) await sql`update comercial_evento set data=data||'{"estado":"pendiente","motivo":null}'::jsonb where organization_id=${actor.organizationId} and cotizacion_id=${quoteId} and action='aviso_aprobacion' and data->>'version'=${String(cmd.version)} and data->>'estado'='bloqueado' and data->>'motivo'='consentimiento_no_acreditado' and data->>'jobId' is null`;
           result = { cotizacionId: quoteId, version: cmd.version, estado: q.estado, consentimiento:{registrado:Boolean(cmd.mensajeAvisoId),preguntaPendiente:!cmd.mensajeAvisoId} };
         } else if (cmd.action === "aceptar") {
           if (q.estado !== "aprobada" || q.aprobada_version !== cmd.version) throw new ComercialError("falta_aprobacion");
-          const [m] = await sql`select m.id from message m join comercial_version v on v.organization_id=m.organization_id
+          const [m] = await sql`select m.id,m.text,m.created_at from message m join comercial_version v on v.organization_id=m.organization_id
             and v.cotizacion_id=${quoteId} and v.version=${cmd.version}
             where m.organization_id=${actor.organizationId} and m.conversation_id=${cmd.conversationId} and m.id=${cmd.mensajeId}
             and m.direction='in' and m.scope_kind='commercial' and m.created_at >= v.created_at
+            and m.created_at <= clock_timestamp()
             and m.created_at >= coalesce((select max(created_at) from comercial_evento where organization_id=${actor.organizationId}
               and cotizacion_id=${quoteId} and action='decidir'),v.created_at)`;
           if (!m) throw new ComercialError("evidencia_aceptacion_invalida",422);
+          const intencion = interpretarAceptacion(String(m.text ?? ""), [
+            snapshot.especial ?? "", ...snapshot.conceptos.map(concepto => concepto.producto.nombre),
+          ]);
+          const [pregunta] = await sql`select e.cotizacion_id,e.data->>'version' as version
+            from comercial_evento e join message anterior on anterior.id=e.data->>'messageId'
+              and anterior.organization_id=e.organization_id
+            where e.organization_id=${actor.organizationId} and e.action='aviso_aprobacion'
+              and anterior.conversation_id=${cmd.conversationId} and anterior.direction='out'
+              and anterior.scope_kind='commercial' and anterior.status in ('sent','delivered','read')
+              and anterior.id=(select id from message where organization_id=${actor.organizationId}
+                and conversation_id=${cmd.conversationId} and scope_kind='commercial' and id<>${cmd.mensajeId}
+                and created_at<=${m.created_at} order by created_at desc,id desc limit 1)`;
+          const [otraAprobada] = await sql`select 1 from comercial_cotizacion
+            where organization_id=${actor.organizationId} and conversation_id=${cmd.conversationId}
+              and id<>${quoteId} and estado='aprobada' limit 1`;
+          const preguntaCoincide = pregunta?.cotizacion_id === quoteId && pregunta?.version === String(cmd.version);
+          if (!intencion || (pregunta ? !preguntaCoincide : intencion !== 'explicita' || otraAprobada)) {
+            throw new ComercialError("intencion_aceptacion_no_acreditada",422);
+          }
           await sql`update comercial_cotizacion set estado='aceptada',accepted_message_id=${cmd.mensajeId} where organization_id=${actor.organizationId} and id=${quoteId}`;
           result = { cotizacionId: quoteId, version: cmd.version, estado: "aceptada" };
         } else if (cmd.action === "contratar") {

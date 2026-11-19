@@ -1,5 +1,75 @@
 import { randomUUID } from "node:crypto";
 import { getSql } from "@/lib/db";
+import type { Snapshot } from "./contracts";
+import conciliacion from "./catalogo-conciliacion-v3.json";
+
+const moneda = new Intl.NumberFormat("es-MX", {
+  style: "currency", currency: "MXN", trailingZeroDisplay: "stripIfInteger",
+});
+const fichaWeb = conciliacion.find(item => item.id === "web")?.campos;
+const condicionGeneral = "Aplican las condiciones de cada concepto del catálogo adjunto.";
+
+function extracto(texto: string | null | undefined, maximo: number) {
+  const limpio = texto?.replace(/\s+/gu, " ").trim();
+  // Conserva frases completas. Los importes salen de los campos aprobados.
+  return limpio && limpio.length <= maximo &&
+    !/[\u0000-\u001f*_`~$]|\bestado\s*:|\b(?:v\d+|mxn|pesos|precio\s+desde|mensualidad\w*|pago\s+[úu]nico|sin\s+costo|gratis|administrativ\w*)\b/iu.test(limpio)
+    ? limpio : null;
+}
+
+export function formatearAvisoAprobacion(id: string, version: number, snapshot: Snapshot): string {
+  const { unico, mensual, conceptos, especial, condiciones, promocion } = snapshot;
+  const referencia = `*Referencia* ${id.slice(0, 8)} · versión ${version}`;
+  const importes = [
+    [unico, snapshot.subtotalUnico, snapshot.ajusteUnico, promocion?.descuento ?? 0],
+    [mensual, snapshot.subtotalMensual, snapshot.ajusteMensual, 0],
+  ];
+  if (importes.some(([total, subtotal, ajuste, descuento]) =>
+    typeof total !== "number" || !Number.isSafeInteger(total) || total < 0 ||
+    (Number.isSafeInteger(subtotal) && Number.isSafeInteger(ajuste) && total !== subtotal! + ajuste! - descuento!)
+  ) || (promocion && snapshot.ajusteUnico !== undefined && snapshot.ajusteUnico !== 0)) {
+    return [
+      "¡Hola! Tu cotización fue aprobada.", referencia,
+      "Los importes de esta versión no coinciden. Lukas puede ayudarte a revisarlos antes de continuar.",
+      "La aprobación no implica contratación ni pago.",
+    ].join("\n\n");
+  }
+
+  const alcances = [
+    ...conceptos.map(({ cantidad, producto }) => ({
+      texto: producto.nombre, prefijo: cantidad > 1 ? `${cantidad} × ` : "",
+    })),
+    ...(snapshot.pendientes ?? []).filter(item => item.estado === "incluido" || item.estado === "cotizado")
+      .map(item => ({ texto: item.descripcion, prefijo: "" })),
+  ];
+  const nombres = alcances.flatMap(({ texto, prefijo }) => {
+    const nombre = extracto(texto, 64);
+    return nombre ? [prefijo + nombre] : [];
+  });
+  const productoWeb = conceptos[0]?.producto;
+  // La síntesis se aplica solo a la ficha conocida y sin alcance adicional.
+  const webPropuesta = conceptos.length === 1 && conceptos[0]?.cantidad === 1 && productoWeb?.id === "web" &&
+    !especial && !promocion && !snapshot.pendientes?.length && condiciones === condicionGeneral && fichaWeb &&
+    productoWeb.condiciones === fichaWeb.condiciones?.antes &&
+    JSON.stringify(productoWeb.caracteristicas) === JSON.stringify(fichaWeb.caracteristicas?.antes) &&
+    JSON.stringify(productoWeb.exclusiones) === JSON.stringify(fichaWeb.exclusiones?.antes);
+  const alcance = extracto(especial, 140);
+  const condicion = condiciones !== condicionGeneral ? extracto(condiciones, 140) : null;
+  const detalle = webPropuesta
+    ? "*Incluye*\n• Una página informativa adaptable a celular y computadora.\n• Contacto por WhatsApp y hasta cinco secciones. La quinta requiere confirmar disponibilidad."
+    : alcance ? `Alcance aprobado: ${alcance}` : null;
+  const terminos = webPropuesta
+    ? "*Condiciones*\nDominio básico y alojamiento propuestos por 12 meses, por confirmar antes de contratar. La renovación se informa por separado."
+    : ["*Condiciones*", condicion, "Puedes revisar todos los detalles de la versión aprobada con Lukas antes de contratar."].filter(Boolean).join("\n");
+
+  return [
+    "¡Hola! Tu cotización fue aprobada. ✅",
+    `*${nombres.slice(0, 2).join(" · ") || "Tu propuesta"}*\n${referencia}`,
+    `*Pago único* ${moneda.format(unico! / 100)} MXN\n*Mensualidad* ${moneda.format(mensual! / 100)} MXN`,
+    detalle, terminos,
+    "La aprobación no implica contratación ni pago.\n\n¿Aceptas esta propuesta para que Lukas te ayude a continuar con la contratación?",
+  ].filter(Boolean).join("\n\n");
+}
 
 /** Solo eventos nuevos: nunca deduce avisos de cotizaciones históricas. */
 export async function prepararAvisosComerciales() {
@@ -31,15 +101,7 @@ export async function prepararAvisosComerciales() {
         continue;
       }
       const key=`comercial-aviso:${e.cotizacion_id}:${e.data.version}:${c!.contact_id}`;
-      const snapshot=c!.snapshot;
-      const money=(n:number)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(n/100);
-      const text=`Tu cotización ${e.cotizacion_id}, versión ${e.data.version}, fue aprobada. `+
-        snapshot.conceptos.map((l:{cantidad:number;producto:{nombre:string;caracteristicas:string[];exclusiones:string[];condiciones:string}})=>`${l.cantidad} × ${l.producto.nombre}: ${l.producto.caracteristicas.join('; ')}. Excluye: ${l.producto.exclusiones.join('; ')}. ${l.producto.condiciones}`).join('\n')+
-        (snapshot.especial ? `\nAlcance aprobado: ${snapshot.especial}\n` : '')+
-        (snapshot.pendientes??[]).map((p:{descripcion:string;estado:string;condiciones?:string})=>`\n${p.descripcion}: ${p.estado}. ${p.condiciones??''}`).join('')+
-        (snapshot.promocion?`\nPrecio original conocido: ${money(snapshot.subtotalUnico)}. Promoción autorizada: ${snapshot.promocion.nombre}, descuento único ${money(snapshot.promocion.descuento)}. ${snapshot.promocion.condiciones??''} `:'')+
-        `. Pago único: ${money(snapshot.unico)}; mensual: ${money(snapshot.mensual)}. ${snapshot.condiciones} `+
-        "Lukas puede continuar contigo: ¿aceptas esta propuesta? La aprobación no confirma contratación ni pago.";
+      const text = formatearAvisoAprobacion(e.cotizacion_id, e.data.version, c!.snapshot);
       if (text.length>4096) {
         await sql`update comercial_evento set data=data||'{"estado":"bloqueado","motivo":"alcance_excede_limite_del_canal"}'::jsonb where id=${e.id}`;
         continue;

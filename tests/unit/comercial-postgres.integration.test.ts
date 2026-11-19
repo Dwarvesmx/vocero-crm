@@ -48,9 +48,10 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
   it('Diagnóstico focalizado INC-01 limita la activación y no habilita avisos', async () => {
     const cotizacionId = '7cca677e-38ab-4395-8386-6df9435c0da2';
     const conversationId = 'cv_23blpiykaljo7xnuwywg';
-    const org = owner.organizationId;
-    const actor = { ...bot, conversationId };
-    const contacto = 'contacto-diagnostico';
+    const org = 'org_cp8uoa1ukrhkgtv5kix0';
+    const actor = { ...bot, organizationId:org, conversationId };
+    const contacto = 'ct_1nldr78yp983ivg9x7jt';
+    await sql`insert into organization(id,name) values(${org},'Piloto sintético')`;
     await sql`insert into contact(id,organization_id,wa_identity,name) values(${contacto},${org},${contacto},'Sintético')`;
     await sql`insert into conversation(id,organization_id,contact_id) values(${conversationId},${org},${contacto})`;
     const base = await preparar();
@@ -68,44 +69,38 @@ describe.skipIf(process.env.COMERCIAL_TEST !== "1")("Comercial V1 · PostgreSQL 
     const cmd = {action:'solicitar_aprobacion',conversationId,cotizacionId,version:1};
     const intentar = (mensajeAvisoId: string, cambios: Record<string,unknown> = {}) => call(actor,{...cmd,mensajeAvisoId,...cambios});
     const rechazado = (promesa: Promise<unknown>) => expect(promesa).rejects.toMatchObject({code:'consentimiento_no_acreditado'});
-    const ahora = Date.now();
     try {
-      vi.stubEnv('INC01_DIAGNOSTICO_ACTIVO','true');
-      vi.stubEnv('INC01_DIAGNOSTICO_ORGANIZACION',org);
-      vi.stubEnv('INC01_DIAGNOSTICO_CONTACTO',contacto);
-      vi.stubEnv('INC01_DIAGNOSTICO_TEXTO_SHA256',createHash('sha256').update(texto).digest('hex'));
-      vi.stubEnv('INC01_DIAGNOSTICO_INICIO_MS',String(ahora-60_000));
-      vi.stubEnv('INC01_DIAGNOSTICO_FIN_MS',String(ahora+29*60_000));
       const id = await mensaje(texto);
-      vi.stubEnv('INC01_DIAGNOSTICO_ORGANIZACION','otra-org');
+      vi.stubEnv('INC01_DIAGNOSTICO_ACTIVO','false');
       await rechazado(intentar(id));
-      vi.stubEnv('INC01_DIAGNOSTICO_ORGANIZACION',org);
-      vi.stubEnv('INC01_DIAGNOSTICO_CONTACTO','segundo');
+      vi.stubEnv('INC01_DIAGNOSTICO_ACTIVO','true');
+      await expect(call({...actor,organizationId:'otra-org'},{...cmd,mensajeAvisoId:id})).rejects.toMatchObject({code:'conversacion_no_disponible'});
+      await sql`insert into contact(id,organization_id,wa_identity,name) values('diagnostico-ajeno',${org},'diagnostico-ajeno','Sintético')`;
+      await sql`update conversation set contact_id='diagnostico-ajeno' where id=${conversationId}`;
       await rechazado(intentar(id));
-      vi.stubEnv('INC01_DIAGNOSTICO_CONTACTO',contacto);
+      await sql`update conversation set contact_id=${contacto} where id=${conversationId}`;
       await expect(intentar(id,{version:2})).rejects.toMatchObject({code:'version_desactualizada'});
       await expect(intentar(id,{cotizacionId:base.cotizacionId})).rejects.toMatchObject({code:'no_encontrada'});
       await expect(call(bot,{...cmd,mensajeAvisoId:id})).rejects.toMatchObject({code:'sin_permiso'});
-      await rechazado(intentar(await mensaje('Mensaje ajeno a la prueba')));
       await rechazado(intentar(await mensaje(texto,false)));
-      vi.stubEnv('INC01_DIAGNOSTICO_INICIO_MS',String(ahora-31*60_000));
-      vi.stubEnv('INC01_DIAGNOSTICO_FIN_MS',String(ahora-60_000));
-      await rechazado(intentar(id));
-      vi.stubEnv('INC01_DIAGNOSTICO_INICIO_MS',String(ahora-60_000));
-      vi.stubEnv('INC01_DIAGNOSTICO_FIN_MS',String(ahora+30*60_000));
-      await rechazado(intentar(id));
-      vi.stubEnv('INC01_DIAGNOSTICO_FIN_MS',String(ahora+29*60_000));
-      const recibos = await Promise.all([intentar(id),intentar(id)]);
+      const requestKey = randomUUID();
+      const recibos = await Promise.all([intentar(id,{requestKey}),intentar(id,{requestKey}),intentar(id)]);
       expect(recibos[0]).toMatchObject({consentimiento:{registrado:true},diagnosticoInc01:true});
       expect(recibos[1]).toEqual(recibos[0]);
-      await rechazado(intentar(await mensaje(texto)));
+      expect(recibos[2]).toEqual(recibos[0]);
+      const otroId = await mensaje('Segundo mensaje sintético, sin frase acordada.');
+      const segundo = await intentar(otroId);
+      expect(segundo).toMatchObject({consentimiento:{registrado:true},diagnosticoInc01:true});
+      expect(segundo.eventoId).not.toBe(recibos[0]!.eventoId);
       vi.stubEnv('INC01_DIAGNOSTICO_ACTIVO','false');
       await rechazado(intentar(id));
-      const estado = await comercialLeer(owner,conversationId,cotizacionId);
+      await expect(intentar(id,{requestKey})).resolves.toMatchObject({consentimiento:{registrado:false}});
+      const estado = await comercialLeer({...owner,organizationId:org},conversationId,cotizacionId);
       expect(estado.cotizaciones[0]).toMatchObject({estado:'pendiente',consentimiento:{registrado:false}});
       expect(estado.pedidos).toHaveLength(0);
-      expect(estado.eventos).toHaveLength(1);
-      expect(estado.eventos[0]).toMatchObject({action:'diagnostico_consentimiento_inc01',data:{version:1,mensajeAvisoId:id,
+      expect(estado.eventos).toHaveLength(2);
+      expect(estado.eventos.map(e=>e.data.mensajeAvisoId)).toEqual(expect.arrayContaining([id,otroId]));
+      expect(estado.eventos.find(e=>e.id===recibos[0]!.eventoId)).toMatchObject({action:'diagnostico_consentimiento_inc01',data:{version:1,mensajeAvisoId:id,
         diagnosticoInc01:{aplicado:true,resultadoNormal:'consentimiento_no_acreditado',motivoNormal:'solicitud_previa_no_vigente',consentimientoRegistrado:true,
           origenHash:createHash('sha256').update(`${conversationId}:${id}`).digest('hex')}}});
     } finally { vi.unstubAllEnvs(); }
